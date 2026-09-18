@@ -2,7 +2,8 @@ import "./style.css";
 
 const root = document.getElementById("root");
 const canvas = document.getElementById("matrixCanvas");
-const STORAGE_KEY = "vaerixon-console-v012";
+const STORAGE_KEY = "vaerixon-console-v015";
+const LEGACY_STORAGE_KEY = "vaerixon-console-v012";
 const ENDPOINT = "https://text.pollinations.ai/";
 const MODEL = "openai";
 const DEFAULT_SYSTEM_PROMPT = "VÆRIXON — Domain-Agnostic, Hyper-Logical Intelligence Core. Be objective, practical, accurate, and direct.";
@@ -10,6 +11,10 @@ const DEFAULT_SYSTEM_PROMPT = "VÆRIXON — Domain-Agnostic, Hyper-Logical Intel
 const freshState = () => ({
   mode: "reality",
   messages: [],
+  messagesByMode: {
+    reality: [],
+    matrix: [],
+  },
   draft: "",
   isStreaming: false,
   error: "",
@@ -34,10 +39,23 @@ const systemPromptReady = fetch("./system-prompt.txt", { cache: "no-store" })
   .catch(() => {});
 
 try {
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+  const savedValue = localStorage.getItem(STORAGE_KEY)
+    || localStorage.getItem(LEGACY_STORAGE_KEY)
+    || "null";
+  const saved = JSON.parse(savedValue);
   if (saved) {
     state.mode = saved.mode === "matrix" ? "matrix" : "reality";
-    state.messages = Array.isArray(saved.messages) ? saved.messages : [];
+    if (saved.messagesByMode && typeof saved.messagesByMode === "object") {
+      state.messagesByMode.reality = Array.isArray(saved.messagesByMode.reality)
+        ? saved.messagesByMode.reality
+        : [];
+      state.messagesByMode.matrix = Array.isArray(saved.messagesByMode.matrix)
+        ? saved.messagesByMode.matrix
+        : [];
+    } else if (Array.isArray(saved.messages)) {
+      state.messagesByMode[state.mode] = saved.messages;
+    }
+    state.messages = state.messagesByMode[state.mode];
   }
 } catch {
   state = freshState();
@@ -45,9 +63,10 @@ try {
 
 const save = () => {
   try {
+    state.messagesByMode[state.mode] = state.messages;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       mode: state.mode,
-      messages: state.messages,
+      messagesByMode: state.messagesByMode,
     }));
   } catch {
     // The console remains usable when browser storage is unavailable.
@@ -198,12 +217,24 @@ const startMatrixRain = () => {
 
   let width = 0;
   let height = 0;
-  let columns = [];
+  let streams = [];
   let raf = 0;
   let lastTime = performance.now();
   let running = true;
-  const fontSize = window.innerWidth < 640 ? 18 : 20;
-  const speed = 0.055;
+  const fontSize = window.innerWidth < 640 ? 18 : 22;
+  const columnGap = fontSize * 1.12;
+  const speed = 0.085;
+
+  const createStream = (x, initial = false) => {
+    const length = 9 + Math.floor(Math.random() * 13);
+    return {
+      x,
+      y: initial
+        ? -Math.random() * (height + length * fontSize)
+        : -fontSize * (2 + Math.random() * 12),
+      glyphs: Array.from({ length }, () => Math.random() > 0.5 ? "1" : "0"),
+    };
+  };
 
   const resize = () => {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
@@ -218,9 +249,9 @@ const startMatrixRain = () => {
     context.textBaseline = "top";
     context.fillStyle = "#000000";
     context.fillRect(0, 0, width, height);
-    columns = Array.from(
-      { length: Math.ceil(width / fontSize) + 1 },
-      () => -Math.random() * height,
+    streams = Array.from(
+      { length: Math.ceil(width / columnGap) + 1 },
+      (_, index) => createStream(index * columnGap, true),
     );
   };
 
@@ -228,19 +259,28 @@ const startMatrixRain = () => {
     if (!running) return;
     const elapsed = Math.min(timestamp - lastTime, 50);
     lastTime = timestamp;
-    context.fillStyle = "rgba(0, 0, 0, 0.08)";
+    context.fillStyle = "rgba(0, 0, 0, 0.1)";
     context.fillRect(0, 0, width, height);
     context.font = `700 ${fontSize}px "DM Mono", monospace`;
     context.fillStyle = "#00FF66";
-    columns.forEach((y, index) => {
-      const x = index * fontSize;
-      const char = (index + Math.floor(y / fontSize)) % 2 === 0 ? "0" : "1";
-      context.fillText(char, x, y);
-      const nextY = y + speed * elapsed;
-      columns[index] = nextY > height + fontSize * 3
-        ? -fontSize * (2 + Math.random() * 12)
-        : nextY;
+    context.shadowColor = "rgba(0, 255, 102, 0.5)";
+    context.shadowBlur = 7;
+    streams.forEach((stream) => {
+      stream.glyphs.forEach((glyph, index) => {
+        const y = stream.y - index * fontSize;
+        if (y < -fontSize || y > height + fontSize) return;
+        context.globalAlpha = Math.max(0.22, 1 - (index / stream.glyphs.length) * 0.7);
+        context.fillText(glyph, stream.x, y);
+      });
+      stream.y += speed * elapsed;
+      if (stream.y - stream.glyphs.length * fontSize > height) {
+        const replacement = createStream(stream.x);
+        stream.y = replacement.y;
+        stream.glyphs = replacement.glyphs;
+      }
     });
+    context.globalAlpha = 1;
+    context.shadowBlur = 0;
     raf = requestAnimationFrame(draw);
   };
 
@@ -357,6 +397,7 @@ const addMessage = (role, content, extra = {}) => {
     ...extra,
   };
   state.messages.push(message);
+  state.messagesByMode[state.mode] = state.messages;
   save();
   return message;
 };
@@ -581,7 +622,11 @@ const bindEvents = () => {
       const action = element.dataset.action;
       if (action === "mode") {
         if (state.mode === element.dataset.mode) return;
+        if (state.isStreaming) stopGeneration();
+        state.messagesByMode[state.mode] = state.messages;
         state.mode = element.dataset.mode;
+        state.messages = state.messagesByMode[state.mode] || [];
+        state.error = "";
         save();
         render();
       }
