@@ -1,8 +1,11 @@
 import "./style.css";
 
 const root = document.getElementById("root");
-const STORAGE_KEY = "vaerixon-console-v05";
+const canvas = document.getElementById("matrixCanvas");
+const STORAGE_KEY = "vaerixon-console-v012";
 const ENDPOINT = "https://text.pollinations.ai/";
+const MODEL = "openai";
+const DEFAULT_SYSTEM_PROMPT = "VÆRIXON — Domain-Agnostic, Hyper-Logical Intelligence Core. Be objective, practical, accurate, and direct.";
 
 const freshState = () => ({
   mode: "reality",
@@ -12,20 +15,24 @@ const freshState = () => ({
   error: "",
   zeroed: false,
   showDeleteModal: false,
-  pendingPrompt: "",
   controller: null,
 });
 
 let state = freshState();
 let wipeGeneration = 0;
 let stopMatrixRain = () => {};
+let activeReader = null;
+let systemPrompt = DEFAULT_SYSTEM_PROMPT;
 const activeControllers = new Set();
-let systemPrompt = "";
 
-const systemPromptReady = fetch("./system-prompt.txt")
-  .then((response) => response.ok ? response.text() : "")
-  .then((prompt) => { systemPrompt = prompt; })
+const systemPromptReady = fetch("./system-prompt.txt", { cache: "no-store" })
+  .then(async (response) => {
+    if (!response.ok) throw new Error(`System prompt returned ${response.status}`);
+    const prompt = await response.text();
+    if (prompt.trim()) systemPrompt = prompt.trim();
+  })
   .catch(() => {});
+
 try {
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
   if (saved) {
@@ -37,10 +44,14 @@ try {
 }
 
 const save = () => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    mode: state.mode,
-    messages: state.messages,
-  }));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      mode: state.mode,
+      messages: state.messages,
+    }));
+  } catch {
+    // The console remains usable when browser storage is unavailable.
+  }
 };
 
 const escapeHTML = (value = "") => String(value)
@@ -50,7 +61,7 @@ const escapeHTML = (value = "") => String(value)
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#039;");
 
-const inlineMarkdown = (value) => {
+const inlineMarkdown = (value = "") => {
   let output = escapeHTML(value);
   output = output.replace(/`([^`]+)`/g, "<code>$1</code>");
   output = output.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
@@ -129,24 +140,20 @@ const formatTime = (timestamp) => new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
 }).format(new Date(timestamp));
 
-const isAmbiguous = (prompt) => {
-  const words = prompt.trim().split(/\s+/).filter(Boolean);
-  const vague = /^(help|explain|thoughts|ideas?|advice|why|how|what|this|that|it|something|anything)$/i.test(prompt.trim());
-  return words.length < 4 || vague || (/^(what|why|how)\s+(is|are|do|can)\b/i.test(prompt) && words.length < 6);
-};
-
 const renderMessage = (message) => {
   const assistant = message.role === "assistant";
-  const content = assistant ? markdown(message.content) : `<p>${inlineMarkdown(message.content).replace(/\n/g, "<br>")}</p>`;
+  const content = assistant
+    ? markdown(message.content)
+    : `<p>${inlineMarkdown(message.content).replace(/\n/g, "<br>")}</p>`;
   const typing = message.streaming && !message.content
     ? '<span class="typing" aria-label="Generating"><i></i><i></i><i></i></span>'
     : "";
   const options = message.options?.length
-    ? `<div class="clarification">${message.options.map((option) => `<button class="clarification-button" data-action="clarify" data-option="${escapeHTML(option)}" data-testid="button-context-${escapeHTML(option.toLowerCase())}">${escapeHTML(option)}</button>`).join("")}</div>`
+    ? `<div class="clarification">${message.options.map((option) => `<button class="clarification-button" data-action="clarify" data-option="${escapeHTML(option)}">${escapeHTML(option)}</button>`).join("")}</div>`
     : "";
   const streamLabel = message.streaming ? " · LIVE" : "";
   return `
-    <article class="message" data-role="${message.role}" data-message-id="${message.id}" data-testid="message-${message.role}-${message.id}">
+    <article class="message" data-role="${message.role}" data-message-id="${message.id}">
       <div class="message-label">${assistant ? "VÆRIXON" : "YOU"}</div>
       <div class="message-content">
         ${content}${typing}${options}
@@ -159,9 +166,10 @@ const renderMessage = (message) => {
 const renderMessages = (shouldScroll = true) => {
   const target = document.querySelector("[data-messages]");
   if (!target) return;
-  if (!state.messages.length) {
-    target.innerHTML = `
-      <div class="empty-state" data-testid="empty-state">
+  target.innerHTML = state.messages.length
+    ? state.messages.map(renderMessage).join("")
+    : `
+      <div class="empty-state">
         <div class="empty-inner">
           <div class="signal" aria-hidden="true">+</div>
           <h2>Ask the instrument.</h2>
@@ -174,72 +182,91 @@ const renderMessages = (shouldScroll = true) => {
         </div>
       </div>
     `;
-  } else {
-    target.innerHTML = state.messages.map(renderMessage).join("");
-  }
   if (shouldScroll) target.scrollTop = target.scrollHeight;
 };
 
-const matrixCanvas = () => {
+const startMatrixRain = () => {
   stopMatrixRain();
-  const canvas = document.querySelector("#matrixCanvas");
-  if (!canvas || state.mode !== "matrix") return;
-  const context = canvas.getContext("2d");
+  if (!canvas || state.mode !== "matrix" || state.zeroed) {
+    if (canvas) canvas.style.display = "none";
+    return;
+  }
+
+  canvas.style.display = "block";
+  const context = canvas.getContext("2d", { alpha: false });
   if (!context) return;
+
   let width = 0;
   let height = 0;
   let columns = [];
   let raf = 0;
+  let lastTime = performance.now();
+  let running = true;
+  const fontSize = window.innerWidth < 640 ? 18 : 20;
+  const speed = 0.055;
+
   const resize = () => {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     width = window.innerWidth;
     height = window.innerHeight;
-    canvas.width = width * ratio;
-    canvas.height = height * ratio;
+    canvas.width = Math.floor(width * ratio);
+    canvas.height = Math.floor(height * ratio);
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-     columns = Array.from({ length: Math.ceil(width / 13) }, () => Math.random() * -height / 13);
-  };
-  resize();
-  window.addEventListener("resize", resize, { passive: true });
-  const draw = () => {
-     context.fillStyle = "rgba(0, 0, 0, .2)";
+    context.font = `700 ${fontSize}px "DM Mono", monospace`;
+    context.textBaseline = "top";
+    context.fillStyle = "#000000";
     context.fillRect(0, 0, width, height);
-     context.font = "13px DM Mono, monospace";
+    columns = Array.from(
+      { length: Math.ceil(width / fontSize) + 1 },
+      () => -Math.random() * height,
+    );
+  };
+
+  const draw = (timestamp) => {
+    if (!running) return;
+    const elapsed = Math.min(timestamp - lastTime, 50);
+    lastTime = timestamp;
+    context.fillStyle = "rgba(0, 0, 0, 0.08)";
+    context.fillRect(0, 0, width, height);
+    context.font = `700 ${fontSize}px "DM Mono", monospace`;
+    context.fillStyle = "#00FF66";
     columns.forEach((y, index) => {
-       const x = index * 13;
-      const char = Math.random() > .5 ? "1" : "0";
-       const alpha = Math.random() * .35 + .55;
-       context.fillStyle = `rgba(0, 255, 102, ${alpha})`;
-       context.shadowColor = "rgba(0, 255, 102, .6)";
-       context.shadowBlur = Math.random() > .9 ? 8 : 0;
-       context.fillText(char, x, y * 13);
-       columns[index] = y * 13 > height + 45 && Math.random() > .975 ? -3 : y + .22;
+      const x = index * fontSize;
+      const char = (index + Math.floor(y / fontSize)) % 2 === 0 ? "0" : "1";
+      context.fillText(char, x, y);
+      const nextY = y + speed * elapsed;
+      columns[index] = nextY > height + fontSize * 3
+        ? -fontSize * (2 + Math.random() * 12)
+        : nextY;
     });
     raf = requestAnimationFrame(draw);
   };
-  draw();
+
+  resize();
+  window.addEventListener("resize", resize, { passive: true });
+  raf = requestAnimationFrame(draw);
   stopMatrixRain = () => {
+    if (!running) return;
+    running = false;
     cancelAnimationFrame(raf);
     window.removeEventListener("resize", resize);
     context.clearRect(0, 0, width, height);
+    canvas.style.display = "none";
     stopMatrixRain = () => {};
   };
 };
 
 const consoleMarkup = () => `
-  <div class="app mode-${state.mode}" data-testid="vaerixon-console">
-    ${state.mode === "matrix" ? '<canvas id="matrixCanvas" aria-hidden="true"></canvas>' : ""}
+  <div class="app mode-${state.mode}">
     <header class="topbar">
       <div>
-        <a class="brand" href="/" data-action="home" data-testid="link-brand">
-          VÆRIXON <span class="brand-mark">/ 0.5</span><span class="brand-subtitle">Wake up to Reality.</span>
-        </a>
+        <a class="brand" href="/" data-action="home">VÆRIXON <span class="brand-mark">/ 0.1.2</span><span class="brand-subtitle">Wake up to Reality.</span></a>
       </div>
       <div class="mode-switch" role="group" aria-label="Interface mode">
-        <button class="mode-button" aria-pressed="${state.mode === "reality"}" data-action="mode" data-mode="reality" data-testid="button-reality-mode">[ REALITY MODE ]</button>
-        <button class="mode-button" aria-pressed="${state.mode === "matrix"}" data-action="mode" data-mode="matrix" data-testid="button-matrix-mode">[ MATRIX MODE ]</button>
+        <button class="mode-button" aria-pressed="${state.mode === "reality"}" data-action="mode" data-mode="reality">[ REALITY MODE ]</button>
+        <button class="mode-button" aria-pressed="${state.mode === "matrix"}" data-action="mode" data-mode="matrix">[ MATRIX MODE ]</button>
       </div>
       <div class="top-actions">
         <div class="system-state"><span class="state-dot"></span><span>${state.isStreaming ? "streaming" : "system ready"}</span></div>
@@ -254,19 +281,19 @@ const consoleMarkup = () => `
         <p class="console-note">${state.mode === "matrix" ? "A cinematic interface for pattern, possibility, and the space between knowns." : "A focused interface for decisions, explanations, and useful first drafts."}</p>
       </div>
       <section class="conversation-shell" aria-label="Conversation">
-        <div class="messages" data-messages role="log" aria-live="polite" data-testid="conversation-log"></div>
+        <div class="messages" data-messages role="log" aria-live="polite"></div>
         <form class="composer" data-composer>
           <div class="composer-wrap">
-             <textarea data-prompt-input rows="1" aria-label="Prompt" placeholder="${state.mode === "matrix" ? "Transmit a thought into the grid..." : "What do you need to make clear?"}" data-testid="input-prompt">${escapeHTML(state.draft)}</textarea>
+            <textarea data-prompt-input rows="1" aria-label="Prompt" placeholder="${state.mode === "matrix" ? "Transmit a thought into the grid..." : "What do you need to make clear?"}">${escapeHTML(state.draft)}</textarea>
             <div class="composer-hint">RETURN TO SEND · SHIFT+RETURN FOR LINE BREAK</div>
           </div>
-          <button class="send-button ${state.isStreaming ? "stop" : ""}" type="${state.isStreaming ? "button" : "submit"}" data-action="${state.isStreaming ? "stop" : "send"}" data-testid="button-${state.isStreaming ? "stop-generation" : "send-prompt"}">${state.isStreaming ? "Stop" : "Transmit"}</button>
+          <button class="send-button ${state.isStreaming ? "stop" : ""}" type="${state.isStreaming ? "button" : "submit"}" data-action="${state.isStreaming ? "stop" : "send"}">${state.isStreaming ? "Stop" : "Transmit"}</button>
         </form>
       </section>
     </main>
     <footer class="footer"><span>TEXT ENGINE · POLLINATIONS</span><span>LOCAL CONSOLE · NO ACCOUNT REQUIRED</span></footer>
-    <button class="emergency-delete" data-action="delete-open" data-testid="button-delete-all">DELETE ALL</button>
-    ${state.error ? `<div class="error-banner" role="alert" data-testid="status-error">${escapeHTML(state.error)}</div>` : ""}
+    <button class="emergency-delete" data-action="delete-open">DELETE ALL</button>
+    ${state.error ? `<div class="error-banner" role="alert">${escapeHTML(state.error)}</div>` : ""}
     ${state.showDeleteModal ? `
       <div class="modal-backdrop" role="presentation">
         <section class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-title">
@@ -274,8 +301,8 @@ const consoleMarkup = () => `
           <h2 id="delete-title">Confirm Absolute Data Wipe?</h2>
           <p>All chats, session cache, and neural context will be permanently destroyed.</p>
           <div class="modal-actions">
-            <button data-action="delete-cancel" data-testid="button-cancel-delete">Keep signal</button>
-            <button class="danger" data-action="delete-confirm" data-testid="button-confirm-delete">Delete all</button>
+            <button data-action="delete-cancel">Keep signal</button>
+            <button class="danger" data-action="delete-confirm">Delete all</button>
           </div>
         </section>
       </div>
@@ -284,18 +311,20 @@ const consoleMarkup = () => `
 `;
 
 const zeroedMarkup = () => `
-  <main class="zeroed-screen" data-testid="system-zeroed">
+  <main class="zeroed-screen">
     <div class="zeroed-inner">
       <div class="zeroed-mark">VÆRIXON // LOCAL MEMORY</div>
       <h1>System Zeroed.</h1>
       <p>The console is clean. No prompts, responses, or mode preference remain on this device. Begin again only when you mean to.</p>
-      <button data-action="initialize" data-testid="button-initialize-console">Initialize fresh console</button>
+      <button data-action="initialize">Initialize fresh console</button>
     </div>
   </main>
 `;
 
 const render = () => {
   if (state.zeroed) {
+    stopMatrixRain();
+    if (canvas) canvas.style.display = "none";
     root.innerHTML = zeroedMarkup();
     bindEvents();
     return;
@@ -303,12 +332,13 @@ const render = () => {
   root.innerHTML = consoleMarkup();
   renderMessages(false);
   bindEvents();
-  if (state.mode === "matrix") matrixCanvas();
-  else stopMatrixRain();
-  if (state.messages.length) {
-    const messages = document.querySelector("[data-messages]");
-    if (messages) messages.scrollTop = messages.scrollHeight;
+  if (state.mode === "matrix") startMatrixRain();
+  else {
+    stopMatrixRain();
+    if (canvas) canvas.style.display = "none";
   }
+  const messages = document.querySelector("[data-messages]");
+  if (messages) messages.scrollTop = messages.scrollHeight;
 };
 
 const updateComposer = () => {
@@ -318,35 +348,143 @@ const updateComposer = () => {
   textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
 };
 
-const setError = (message) => {
-  state.error = message;
-  render();
-};
-
 const addMessage = (role, content, extra = {}) => {
-  const message = { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, role, content, createdAt: Date.now(), ...extra };
+  const message = {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    role,
+    content,
+    createdAt: Date.now(),
+    ...extra,
+  };
   state.messages.push(message);
   save();
   return message;
 };
 
-const cleanStreamChunk = (chunk) => {
-  const lines = chunk.split(/\r?\n/);
-  return lines.map((line) => {
-    if (!line.startsWith("data:")) return line;
-    const payload = line.slice(5).trim();
-    if (!payload || payload === "[DONE]") return "";
-    try {
-      const parsed = JSON.parse(payload);
-      return parsed.choices?.[0]?.delta?.content
-        || parsed.choices?.[0]?.text
-        || parsed.content
-        || parsed.text
-        || "";
-    } catch {
-      return payload;
+const extractText = (payload) => {
+  const trimmed = String(payload || "").trim();
+  if (!trimmed || trimmed === "[DONE]") return "";
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed.choices?.[0]?.delta?.content
+      || parsed.choices?.[0]?.message?.content
+      || parsed.choices?.[0]?.text
+      || parsed.message?.content
+      || parsed.content
+      || parsed.response
+      || parsed.text
+      || parsed.output
+      || "";
+  } catch {
+    return trimmed;
+  }
+};
+
+const cleanSse = (chunk) => chunk
+  .split(/\r?\n/)
+  .map((line) => line.startsWith("data:") ? line.slice(5).trim() : line.trim())
+  .filter(Boolean)
+  .map(extractText)
+  .filter(Boolean)
+  .join("");
+
+const consumeResponse = async (response, assistant, controller, generation) => {
+  const contentType = response.headers.get("content-type") || "";
+  const isSse = contentType.includes("text/event-stream");
+  if (!isSse && contentType.includes("application/json")) {
+    const text = await response.text();
+    if (controller.signal.aborted) throw new DOMException("Generation stopped", "AbortError");
+    assistant.content += extractText(text);
+    return;
+  }
+  if (!response.body || typeof response.body.getReader !== "function") {
+    const text = await response.text();
+    assistant.content += extractText(text);
+    return;
+  }
+
+  const reader = response.body.getReader();
+  activeReader = reader;
+  const decoder = new TextDecoder();
+  let buffered = "";
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (controller.signal.aborted) throw new DOMException("Generation stopped", "AbortError");
+      if (generation !== wipeGeneration) return;
+      const decoded = decoder.decode(value, { stream: true });
+      if (isSse) {
+        buffered += decoded;
+        const lines = buffered.split(/\r?\n/);
+        buffered = lines.pop() || "";
+        assistant.content += cleanSse(lines.join("\n"));
+      } else {
+        assistant.content += decoded;
+      }
+      renderMessages(true);
     }
-  }).filter(Boolean).join("");
+
+    const tail = decoder.decode();
+    if (isSse) assistant.content += cleanSse(`${buffered}${tail}`);
+    else assistant.content += tail;
+  } finally {
+    if (activeReader === reader) activeReader = null;
+  }
+};
+
+const requestText = async (prompt, controller) => {
+  const system = `${systemPrompt}\n\nOperating mode: ${state.mode.toUpperCase()}`;
+  const payload = `${system}\n\nUSER INPUT:\n${prompt}`;
+  const candidates = [
+    {
+      url: `${ENDPOINT}?model=${encodeURIComponent(MODEL)}&stream=true`,
+      init: {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream, application/json, text/plain" },
+        body: JSON.stringify({
+          model: MODEL,
+          stream: true,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: prompt },
+          ],
+        }),
+        signal: controller.signal,
+      },
+    },
+    {
+      url: `${ENDPOINT}?stream=true`,
+      init: {
+        method: "POST",
+        headers: { "Content-Type": "text/plain", Accept: "text/event-stream, text/plain" },
+        body: payload,
+        signal: controller.signal,
+      },
+    },
+    {
+      url: `${ENDPOINT}${encodeURIComponent(prompt)}?model=${encodeURIComponent(MODEL)}&stream=true`,
+      init: {
+        method: "GET",
+        headers: { Accept: "text/event-stream, text/plain" },
+        signal: controller.signal,
+      },
+    },
+  ];
+
+  let lastError = new Error("The text endpoint did not return a response.");
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(candidate.url, candidate.init);
+      if (response.ok) return response;
+      lastError = new Error(`Text endpoint returned ${response.status}.`);
+    } catch (error) {
+      if (controller.signal.aborted) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
 };
 
 const streamAnswer = async (prompt, assistant, controller, generation) => {
@@ -355,103 +493,47 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
   render();
   try {
     await systemPromptReady;
-    const payload = `${systemPrompt}\n\nUSER INPUT:\n${prompt}`;
-    let response;
-    try {
-      response = await fetch(`${ENDPOINT}?stream=true`, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain", "Accept": "text/event-stream, text/plain" },
-        body: payload,
-        signal: controller.signal,
-      });
-    } catch (error) {
-      if (error.name === "AbortError") throw error;
-    }
-    if (!response?.ok) {
-      if (controller.signal.aborted) throw new DOMException("Generation stopped", "AbortError");
-      response = await fetch(`${ENDPOINT}${encodeURIComponent(payload)}?stream=true`, {
-        method: "GET",
-        headers: { "Accept": "text/event-stream, text/plain" },
-        signal: controller.signal,
-      });
-    }
-    if (!response.ok) throw new Error(`Text endpoint returned ${response.status}.`);
-    if (!response.body || typeof response.body.getReader !== "function") {
-      const onePass = await response.text();
-      assistant.content = onePass || "The endpoint returned no readable text.";
-      assistant.streaming = false;
-      state.error = "Live streaming is unavailable in this browser. The response was loaded in one pass.";
-      state.isStreaming = false;
-      save();
-      render();
-      return;
-    }
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    const sse = response.headers.get("content-type")?.includes("text/event-stream");
-    let buffered = "";
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (generation !== wipeGeneration) return;
-      const decoded = decoder.decode(value, { stream: true });
-      let chunk = decoded;
-      if (sse) {
-        buffered += decoded;
-        const lines = buffered.split(/\r?\n/);
-        buffered = lines.pop() || "";
-        chunk = cleanStreamChunk(lines.join("\n"));
-      }
-      if (chunk) {
-        assistant.content += chunk;
-        renderMessages();
-      }
-    }
+    const response = await requestText(prompt, controller);
+    await consumeResponse(response, assistant, controller, generation);
     if (generation !== wipeGeneration) return;
-    const tail = sse
-      ? cleanStreamChunk(buffered + decoder.decode())
-      : decoder.decode();
-    if (tail) assistant.content += tail;
+    if (controller.signal.aborted) throw new DOMException("Generation stopped", "AbortError");
     assistant.streaming = false;
     state.isStreaming = false;
     if (!assistant.content.trim()) assistant.content = "No signal returned. Try transmitting again.";
     save();
-    renderMessages();
-    updateStatus();
-    refreshTransportButton();
+    render();
   } catch (error) {
     if (generation !== wipeGeneration) return;
-    if (error.name === "AbortError") {
+    assistant.streaming = false;
+    state.isStreaming = false;
+    if (error?.name === "AbortError" || controller.signal.aborted) {
       assistant.content = assistant.content || "Generation stopped by operator.";
-      assistant.streaming = false;
       state.error = "Generation stopped. The partial response remains in the console.";
     } else {
       assistant.content = assistant.content || "The text service could not return a response.";
-      assistant.streaming = false;
-      state.error = "Connection issue: the text endpoint could not be reached. Check your network and try again.";
+      state.error = "Connection issue: the text endpoint could not be reached. Try again when the network is available.";
     }
-    state.isStreaming = false;
     save();
     render();
   }
 };
 
-const updateStatus = () => {
-  const status = document.querySelector(".system-state span:last-child");
-  if (status) status.textContent = state.isStreaming ? "streaming" : "system ready";
-};
-
-const refreshTransportButton = () => {
-  const current = document.querySelector(".send-button");
-  if (!current || state.isStreaming) return;
-  const next = current.cloneNode(true);
-  next.classList.remove("stop");
-  next.classList.add("send-button");
-  next.type = "submit";
-  next.dataset.action = "send";
-  next.dataset.testid = "button-send-prompt";
-  next.textContent = "Transmit";
-  current.replaceWith(next);
+const stopGeneration = () => {
+  const controller = state.controller;
+  if (!controller && !activeReader) return;
+  controller?.abort();
+  const reader = activeReader;
+  activeReader = null;
+  if (reader) reader.cancel().catch(() => {});
+  const assistant = [...state.messages].reverse().find((message) => message.role === "assistant" && message.streaming);
+  if (assistant) {
+    assistant.streaming = false;
+    assistant.content ||= "Generation stopped by operator.";
+  }
+  state.isStreaming = false;
+  state.error = "Generation stopped. The partial response remains in the console.";
+  save();
+  render();
 };
 
 const sendPrompt = async (value) => {
@@ -460,44 +542,34 @@ const sendPrompt = async (value) => {
   state.draft = "";
   state.error = "";
   addMessage("user", prompt);
-  if (state.mode === "reality" && isAmbiguous(prompt)) {
-    state.pendingPrompt = prompt;
-    addMessage("assistant", `I can work with that, but the target is underspecified. Before I answer, resolve these variables:
-
-1. **Outcome:** What should the answer help you decide, make, or understand?
-2. **Audience:** Who will use or read the result?
-3. **Constraints:** What limits, risks, tools, or requirements matter?
-4. **Time horizon:** Is this for now, this week, or a longer-term decision?
-5. **Trade-off:** Should I optimize for speed, depth, cost, or certainty?
-
-Choose the closest operating target below, or answer the questions directly.`, {
-      options: ["Decision", "Explanation", "Plan", "Draft"],
-    });
-    render();
-    return;
-  }
   const assistant = addMessage("assistant", "", { streaming: true });
   const controller = new AbortController();
   const generation = wipeGeneration;
   state.controller = controller;
   activeControllers.add(controller);
-  await streamAnswer(prompt, assistant, controller, generation);
-  activeControllers.delete(controller);
-  if (generation === wipeGeneration) state.controller = null;
+  try {
+    await streamAnswer(prompt, assistant, controller, generation);
+  } finally {
+    activeControllers.delete(controller);
+    if (generation === wipeGeneration && state.controller === controller) state.controller = null;
+  }
 };
 
 const deleteAll = () => {
   wipeGeneration += 1;
   activeControllers.forEach((controller) => controller.abort());
   activeControllers.clear();
-  if (state.controller) state.controller.abort();
+  state.controller?.abort();
+  activeReader?.cancel().catch(() => {});
+  activeReader = null;
   stopMatrixRain();
   try {
     localStorage.clear();
     sessionStorage.clear();
   } catch {
-    // The clean state still applies if storage is unavailable.
+    // The zeroed state still applies if storage is unavailable.
   }
+  systemPrompt = "";
   root.replaceChildren();
   state = { ...freshState(), zeroed: true };
   render();
@@ -505,38 +577,50 @@ const deleteAll = () => {
 
 const bindEvents = () => {
   document.querySelectorAll("[data-action]").forEach((element) => {
-    element.addEventListener("click", (event) => {
+    element.addEventListener("click", () => {
       const action = element.dataset.action;
       if (action === "mode") {
-        if (state.isStreaming || state.mode === element.dataset.mode) return;
-        stopMatrixRain();
+        if (state.mode === element.dataset.mode) return;
         state.mode = element.dataset.mode;
         save();
         render();
       }
+      if (action === "home") {
+        window.scrollTo({ top: 0, behavior: "auto" });
+      }
       if (action === "delete-open") { state.showDeleteModal = true; render(); }
       if (action === "delete-cancel") { state.showDeleteModal = false; render(); }
       if (action === "delete-confirm") deleteAll();
-      if (action === "initialize") { state = freshState(); save(); render(); }
-      if (action === "stop") {
-        if (state.controller) state.controller.abort();
-      }
+      if (action === "initialize") { state = freshState(); systemPrompt = DEFAULT_SYSTEM_PROMPT; save(); render(); }
+      if (action === "stop") stopGeneration();
       if (action === "suggestion") {
         const input = document.querySelector("[data-prompt-input]");
-        if (input) { input.value = element.dataset.prompt; state.draft = input.value; input.focus(); updateComposer(); }
+        if (input) {
+          input.value = element.dataset.prompt || "";
+          state.draft = input.value;
+          input.focus();
+          updateComposer();
+        }
       }
       if (action === "clarify") {
-        const option = element.dataset.option;
-        const prompt = `${state.pendingPrompt} — optimize for ${option.toLowerCase()}`;
-        state.pendingPrompt = "";
-        sendPrompt(prompt);
+        const input = document.querySelector("[data-prompt-input]");
+        if (input) {
+          input.value = `${input.value} — optimize for ${element.dataset.option || "clarity"}`;
+          state.draft = input.value;
+          input.focus();
+          updateComposer();
+        }
       }
     });
   });
+
   const composer = document.querySelector("[data-composer]");
   const input = document.querySelector("[data-prompt-input]");
   if (composer && input) {
-    input.addEventListener("input", () => { state.draft = input.value; updateComposer(); });
+    input.addEventListener("input", () => {
+      state.draft = input.value;
+      updateComposer();
+    });
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
@@ -545,26 +629,28 @@ const bindEvents = () => {
     });
     composer.addEventListener("submit", (event) => {
       event.preventDefault();
-      sendPrompt(input.value);
+      if (state.isStreaming) stopGeneration();
+      else sendPrompt(input.value);
     });
     updateComposer();
   }
+
   const modal = document.querySelector(".modal-backdrop");
   if (modal) {
     const dialog = modal.querySelector(".modal");
-    if (dialog) {
-      dialog.tabIndex = -1;
-      dialog.focus();
-      dialog.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") {
-          state.showDeleteModal = false;
-          render();
-        }
-      });
-    }
+    dialog?.focus();
     modal.addEventListener("click", (event) => {
-      if (event.target === modal) { state.showDeleteModal = false; render(); }
+      if (event.target === modal) {
+        state.showDeleteModal = false;
+        render();
+      }
     });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.showDeleteModal) {
+        state.showDeleteModal = false;
+        render();
+      }
+    }, { once: true });
   }
 };
 
