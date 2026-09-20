@@ -19,6 +19,7 @@ const freshState = () => ({
   error: "",
   zeroed: false,
   showDeleteModal: false,
+  showOfflineModal: false,
   controller: null,
   streamingMessageId: null,
 });
@@ -28,6 +29,94 @@ let wipeGeneration = 0;
 let stopMatrixRain = () => {};
 let systemPrompt = "";
 const activeControllers = new Set();
+
+const MODE_PROMPTS = {
+  reality: [
+    "Respond in a clear, direct, highly professional, academic style.",
+    "Organize complex answers with useful headings, numbered steps, definitions, and examples.",
+    "For mathematics, show the reasoning step by step, state the rule used at each step, and verify the result.",
+  ].join(" "),
+  matrix: [
+    "Respond with deep-dive analytical context, raw signal reasoning, and precise conclusions.",
+    "Explore assumptions, mechanisms, patterns, and implications without unnecessary theatrics.",
+    "For mathematics, show every meaningful step, explain the rule used, and verify the result.",
+  ].join(" "),
+};
+
+const OFFLINE_KNOWLEDGE = {
+  neuron: {
+    aliases: ["neurons", "nerve cell", "nerve cells"],
+    answer: "**Neurons** are specialized cells that receive, process, and transmit information.\n\n1. **Dendrites** receive signals from other cells.\n2. The **cell body** integrates those signals.\n3. If the combined signal reaches threshold, the **axon** carries an electrical impulse.\n4. **Synapses** pass the signal to the next cell using chemical or electrical communication.\n\nThis structure lets nervous systems turn sensory input into coordinated thought, movement, and behavior.",
+  },
+  synapse: {
+    aliases: ["synapses", "synaptic"],
+    answer: "A **synapse** is the communication junction between a neuron and another neuron, muscle, or gland.\n\nWhen an action potential reaches the presynaptic terminal, it can release neurotransmitters into the synaptic gap. Those molecules bind to receptors on the next cell and either increase or decrease its chance of firing. Synapses are therefore not just wires; they are adjustable decision points that support learning and memory.",
+  },
+  "action potential": {
+    aliases: ["action potentials", "nerve impulse", "nerve impulses"],
+    answer: "An **action potential** is a rapid, temporary reversal of electrical charge across a neuron's membrane.\n\n1. A stimulus depolarizes the membrane toward threshold.\n2. Voltage-gated sodium channels open, causing rapid depolarization.\n3. Sodium channels inactivate while potassium channels open.\n4. Potassium leaves the cell, producing repolarization and a brief undershoot.\n5. The refractory period helps the signal travel in one direction.\n\nIt is an all-or-nothing event: stronger inputs usually increase firing frequency rather than the size of each impulse.",
+  },
+  "brain lobes": {
+    aliases: ["brain lobe", "frontal lobe", "parietal lobe", "temporal lobe", "occipital lobe"],
+    answer: "The cerebral cortex is commonly described through four major lobes:\n\n- **Frontal lobe:** planning, decision-making, voluntary movement, speech production, and inhibition.\n- **Parietal lobe:** body sensation, spatial processing, and integration of sensory information.\n- **Temporal lobe:** hearing, language comprehension, memory, and aspects of emotion.\n- **Occipital lobe:** visual processing.\n\nThese functions overlap across networks, so the lobes are useful anatomical guides rather than isolated boxes.",
+  },
+  dna: {
+    aliases: ["deoxyribonucleic acid"],
+    answer: "**DNA** stores hereditary information in the sequence of its nucleotide bases: adenine, thymine, cytosine, and guanine.\n\nIts double-helix structure allows each strand to serve as a template for copying. Specific DNA sequences can be transcribed into RNA, and many RNA molecules guide the production of proteins. Regulation around those sequences helps determine when and where genes are used.",
+  },
+  rna: {
+    aliases: ["ribonucleic acid", "messenger rna", "mrna"],
+    answer: "**RNA** is a nucleic acid with many roles in gene expression.\n\nMessenger RNA carries a transcribed sequence from DNA. Ribosomal RNA forms much of the ribosome, and transfer RNA helps match amino acids to codons during protein synthesis. Other RNA molecules regulate genes, process transcripts, or catalyze reactions. Unlike DNA, RNA usually exists as a single strand and uses uracil instead of thymine.",
+  },
+  "cellular respiration": {
+    aliases: ["cell respiration", "aerobic respiration"],
+    answer: "**Cellular respiration** converts energy in nutrients into ATP, the cell's immediately usable energy currency.\n\n1. **Glycolysis** splits glucose in the cytoplasm and produces a small amount of ATP and NADH.\n2. The **citric acid cycle** processes acetyl-CoA and loads electron carriers.\n3. The **electron transport chain** uses those carriers to build a proton gradient.\n4. **ATP synthase** uses the gradient to produce most of the ATP.\n\nOxygen serves as the final electron acceptor in aerobic respiration, forming water.",
+  },
+  "quantum mechanics": {
+    aliases: ["quantum mechanic", "quantum physics"],
+    answer: "**Quantum mechanics** describes matter and energy at atomic and subatomic scales.\n\nIts central ideas include quantized energy levels, wave-particle duality, superposition, probability amplitudes, and measurement limits. The theory predicts probabilities for possible outcomes rather than a single classical trajectory. It is counterintuitive at human scales but exceptionally accurate for atoms, electrons, photons, and many modern technologies.",
+  },
+  "general relativity": {
+    aliases: ["einstein relativity", "relativity"],
+    answer: "**General relativity** describes gravity as the curvature of spacetime caused by energy and mass.\n\nObjects follow the straightest available paths through curved spacetime, which appears to us as gravitational attraction. The theory predicts gravitational time dilation, the bending of light, black holes, and gravitational waves. In weak fields and at low speeds, it approaches Newtonian gravity.",
+  },
+  "black holes": {
+    aliases: ["black hole", "event horizon", "event horizons"],
+    answer: "A **black hole** is a region of spacetime from which nothing that crosses the event horizon can escape to the outside universe.\n\nIt forms when enough mass is compressed that escape would require a speed greater than light. The event horizon is not a solid surface; it is a causal boundary. Around it, infalling matter can form a hot accretion disk, and the system can release powerful radiation before matter crosses the horizon.",
+  },
+  "big bang theory": {
+    aliases: ["big bang", "early universe", "cosmological expansion"],
+    answer: "The **Big Bang theory** describes the evolution of the observable universe from an earlier hot, dense state.\n\nEvidence includes the expansion of space, the cosmic microwave background, and the observed abundance of light elements. It does not describe an explosion into pre-existing space; it describes space itself expanding. The theory explains the universe's development from its early state, while questions about the absolute beginning remain active areas of cosmology.",
+  },
+  gravity: {
+    aliases: ["gravitational force", "gravitation"],
+    answer: "**Gravity** is the interaction that causes mass and energy to influence motion.\n\nIn Newtonian physics, two masses attract with a force proportional to the product of their masses and inversely proportional to the square of their separation. In general relativity, gravity is the geometry of spacetime. Both descriptions are useful, with relativity becoming essential for very strong fields, high precision, or cosmological scales.",
+  },
+  "scientific method": {
+    aliases: ["science method", "scientific reasoning"],
+    answer: "The **scientific method** is a disciplined way to build and test explanations.\n\n1. Observe a pattern or ask a focused question.\n2. Form a hypothesis that makes testable predictions.\n3. Collect evidence under controlled conditions where possible.\n4. Compare the evidence with the prediction.\n5. Revise, replicate, and communicate the result.\n\nIt is not a rigid single sequence; its core is transparent reasoning that can be checked and corrected by others.",
+  },
+  "critical thinking": {
+    aliases: ["critical reasoning", "reason critically"],
+    answer: "**Critical thinking** means evaluating claims by separating evidence, assumptions, inference, and conclusion.\n\nAsk what the claim means, what evidence supports it, what evidence would change your mind, whether the source is reliable, and whether the conclusion is stronger than the evidence allows. Good critical thinking is not automatic skepticism; it is proportioning confidence to the quality of the reasons.",
+  },
+  "deductive reasoning": {
+    aliases: ["deduction", "deductive logic"],
+    answer: "**Deductive reasoning** starts with premises and derives a conclusion that must be true if the premises are true and the argument form is valid.\n\nExample:\n- All mammals are warm-blooded.\n- Whales are mammals.\n- Therefore, whales are warm-blooded.\n\nA deduction can be logically valid even if a premise is false, so soundness requires both a valid structure and true premises.",
+  },
+  "inductive reasoning": {
+    aliases: ["induction", "inductive logic"],
+    answer: "**Inductive reasoning** generalizes from observations to a conclusion that is supported but not guaranteed.\n\nSeeing many well-tested cases can justify confidence that a pattern will continue, but it cannot provide the absolute certainty of a valid deduction. Strong induction uses representative evidence, considers alternatives, and states its uncertainty clearly.",
+  },
+  probability: {
+    aliases: ["probabilities", "probability theory"],
+    answer: "**Probability** measures uncertainty from 0 to 1, or equivalently from 0% to 100%.\n\nFor equally likely outcomes, probability is favorable outcomes divided by total outcomes. Conditional probability updates a belief when new information is known: P(A|B) = P(A and B) / P(B). A careful solution defines the events first, identifies independence assumptions, and keeps the denominator consistent with the information available.",
+  },
+  algorithms: {
+    aliases: ["algorithm", "algorithmic thinking"],
+    answer: "An **algorithm** is a finite, unambiguous procedure for solving a problem or transforming input into output.\n\nA useful algorithm specifies the steps, handles edge cases, and terminates. Its efficiency is often described with time and space complexity, such as O(n) for work that grows linearly with input size. The best choice balances correctness, performance, clarity, and the constraints of the problem.",
+  },
+};
 
 const safeRead = (storage, key) => {
   try {
@@ -101,6 +190,185 @@ const systemPromptReady = fetch("./system-prompt.txt", { cache: "no-store" })
   .catch(() => {
     systemPrompt = "";
   });
+
+const normalizePrompt = (value = "") => String(value)
+  .toLowerCase()
+  .normalize("NFKC")
+  .replace(/[^\p{L}\p{N}\s]/gu, " ")
+  .replace(/\s+/g, " ")
+  .trim();
+
+const getTierOneResponse = (prompt) => {
+  const normalized = normalizePrompt(prompt);
+
+  if (/^(hi|hello|hey)( there)?$/.test(normalized)) {
+    return "Hello! VÆRIXON here. How can I assist you today?";
+  }
+  if (normalized === "who are you") {
+    return "I’m VÆRIXON. I help turn questions, ideas, and difficult problems into clear, useful answers.";
+  }
+  if (normalized === "what is vaerixon") {
+    return "VÆRIXON is a focused thinking partner for explanations, decisions, research, and first drafts.";
+  }
+  if (normalized === "help") {
+    return "I can explain difficult ideas, work through mathematics step by step, compare options, and help you shape a strong first draft. What would you like to make clear?";
+  }
+  if (normalized === "status") {
+    return "Everything is ready. Ask a question whenever you’re ready.";
+  }
+
+  return "";
+};
+
+const cleanAssistantOutput = (value = "") => {
+  const technicalTagOnly = /^\s*[\[\(\{]?\s*(?:core online|offline core|text engine)(?:\s*[·|:=-].*)?[\]\)\}]?\s*$/i;
+  return String(value)
+    .split("\n")
+    .filter((line) => !technicalTagOnly.test(line))
+    .join("\n")
+    .replace(/\b(?:core online|offline core|text engine)\b\s*[:|·=-]?\s*/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+};
+
+const arithmeticExpressionFromPrompt = (prompt) => {
+  const candidate = String(prompt)
+    .trim()
+    .replace(/^(?:what is|calculate|evaluate|solve)\s+/i, "")
+    .replace(/[?=]+$/, "")
+    .trim();
+
+  return /^[\d+\-*/^().\s]+$/.test(candidate) ? candidate : "";
+};
+
+const evaluateArithmetic = (expression) => {
+  const compact = expression.replace(/\s+/g, "");
+  const tokens = compact.match(/(?:\d+(?:\.\d+)?|[()+\-*/^])/g);
+  if (!tokens || tokens.join("") !== compact) return null;
+  if (tokens.some((token, index) => (
+    token === "-"
+    && index > 0
+    && ["+", "-", "*", "/", "^", "("].includes(tokens[index - 1])
+  ))) return null;
+  if (tokens[0] === "-") tokens.unshift("0");
+
+  const precedence = { "+": 1, "-": 1, "*": 2, "/": 2, "^": 3 };
+  const values = [];
+  const operators = [];
+
+  const applyTopOperator = () => {
+    const operator = operators.pop();
+    const right = values.pop();
+    const left = values.pop();
+    if (left === undefined || right === undefined) throw new Error("invalid expression");
+    if (operator === "/" && right === 0) throw new Error("division by zero");
+    values.push({
+      "+": () => left + right,
+      "-": () => left - right,
+      "*": () => left * right,
+      "/": () => left / right,
+      "^": () => left ** right,
+    }[operator]());
+  };
+
+  try {
+    tokens.forEach((token) => {
+      if (/^\d/.test(token)) {
+        values.push(Number(token));
+        return;
+      }
+      if (token === "(") {
+        operators.push(token);
+        return;
+      }
+      if (token === ")") {
+        while (operators.length && operators.at(-1) !== "(") applyTopOperator();
+        if (operators.pop() !== "(") throw new Error("invalid expression");
+        return;
+      }
+
+      while (
+        operators.length
+        && operators.at(-1) !== "("
+        && precedence[operators.at(-1)] >= precedence[token]
+        && token !== "^"
+      ) {
+        applyTopOperator();
+      }
+      operators.push(token);
+    });
+
+    while (operators.length) {
+      if (operators.at(-1) === "(") throw new Error("invalid expression");
+      applyTopOperator();
+    }
+
+    if (values.length !== 1 || !Number.isFinite(values[0])) return null;
+    return values[0];
+  } catch {
+    return null;
+  }
+};
+
+const getOfflineMathResponse = (prompt) => {
+  const expression = arithmeticExpressionFromPrompt(prompt);
+  if (!expression) return "";
+  const result = evaluateArithmetic(expression);
+  if (result === null) return "";
+
+  return [
+    `Let’s solve **${expression}** step by step.`,
+    "",
+    "1. Apply multiplication, division, and exponents before addition or subtraction.",
+    "2. Evaluate the remaining operations from left to right.",
+    `3. The result is **${result}**.`,
+  ].join("\n");
+};
+
+const getOfflineResponse = (prompt) => {
+  const normalized = normalizePrompt(prompt);
+  const entry = Object.entries(OFFLINE_KNOWLEDGE).find(([topic, knowledge]) => (
+    [topic, ...knowledge.aliases].some((term) => normalized.includes(term))
+  ));
+
+  if (entry) return entry[1].answer;
+
+  const mathResponse = getOfflineMathResponse(prompt);
+  if (mathResponse) return mathResponse;
+
+  return [
+    "I can continue helping while the external signal is unavailable.",
+    "",
+    "I don’t have a local reference for that exact topic yet. Try asking for a definition, a comparison, a worked example, or a step-by-step breakdown, and I’ll reason from the information available in this session.",
+  ].join("\n");
+};
+
+const getModeInstruction = () => {
+  const basePrompt = systemPrompt ? `${systemPrompt}\n\n` : "";
+  return `${basePrompt}${MODE_PROMPTS[state.mode]}`;
+};
+
+const getChatHistory = (prompt) => {
+  const previousMessages = state.messages
+    .filter((message) => (
+      !message.streaming
+      && (message.role === "user" || message.role === "assistant")
+      && typeof message.content === "string"
+      && message.content.trim()
+    ))
+    .slice(0, -1)
+    .slice(-24)
+    .map((message) => ({
+      role: message.role,
+      content: cleanAssistantOutput(message.content),
+    }));
+
+  return [
+    { role: "system", content: getModeInstruction() },
+    ...previousMessages,
+    { role: "user", content: prompt },
+  ];
+};
 
 const setDocumentMode = () => {
   document.documentElement.dataset.mode = state.mode;
@@ -408,7 +676,7 @@ const consoleMarkup = () => `
         </form>
       </section>
     </main>
-    <footer class="footer"><span>TEXT ENGINE · POLLINATIONS</span><span>LOCAL CONSOLE · NO ACCOUNT REQUIRED</span></footer>
+    <footer class="footer"><span>PRIVATE SESSION</span><span>NO ACCOUNT REQUIRED</span></footer>
     <button class="emergency-delete" data-action="delete-open">DELETE ALL</button>
     ${state.error ? `<div class="error-banner" role="alert">${escapeHTML(state.error)}</div>` : ""}
     ${state.showDeleteModal ? `
@@ -420,6 +688,18 @@ const consoleMarkup = () => `
           <div class="modal-actions">
             <button data-action="delete-cancel">Keep signal</button>
             <button class="danger" data-action="delete-confirm">Delete all</button>
+          </div>
+        </section>
+      </div>
+    ` : ""}
+    ${state.showOfflineModal ? `
+      <div class="modal-backdrop" data-modal-backdrop data-offline-backdrop>
+        <section class="modal" role="dialog" aria-modal="true" aria-labelledby="offline-title">
+          <div class="modal-kicker">Signal interruption</div>
+          <h2 id="offline-title">ADVANCED NEURAL CORE REQUIRED</h2>
+          <p>Primary external signal offline. Backup Engine Active.</p>
+          <div class="modal-actions">
+            <button data-action="offline-dismiss">Continue offline</button>
           </div>
         </section>
       </div>
@@ -503,7 +783,7 @@ const extractText = (payload) => {
 
 const appendAssistantText = (assistant, text) => {
   if (!text) return;
-  assistant.content += text;
+  assistant.content = cleanAssistantOutput(`${assistant.content}${text}`);
   renderMessages(true);
 };
 
@@ -549,48 +829,49 @@ const consumeResponse = async (response, assistant, controller) => {
 };
 
 const requestResponse = async (prompt, controller) => {
-  const instructions = systemPrompt
-    ? `${systemPrompt}\n\nACTIVE MODE: ${state.mode.toUpperCase()}`
-    : `VÆRIXON active mode: ${state.mode}`;
-  const combinedPrompt = `${instructions}\n\nUSER INPUT:\n${prompt}`;
-  const encodedPrompt = encodeURIComponent(combinedPrompt);
-
-  const requests = [
-    () => fetch(`${ENDPOINT}${encodedPrompt}?stream=true`, {
-      method: "GET",
-      headers: { Accept: "text/event-stream, text/plain, application/json" },
-      signal: controller.signal,
-    }),
-    () => fetch(ENDPOINT, {
-      method: "POST",
-      headers: {
-        Accept: "text/event-stream, text/plain, application/json",
-        "Content-Type": "text/plain;charset=UTF-8",
-      },
-      body: combinedPrompt,
-      signal: controller.signal,
-    }),
-  ];
-
-  let lastError = new Error("The text endpoint did not respond.");
-  for (const makeRequest of requests) {
-    if (controller.signal.aborted) throw new DOMException("Generation stopped", "AbortError");
-    try {
-      const response = await makeRequest();
-      const contentType = response.headers.get("content-type") || "";
-      if (response.ok && !contentType.includes("text/html")) return response;
-      lastError = new Error(`Text endpoint returned ${response.status}.`);
-      if (response.body?.cancel) await response.body.cancel();
-    } catch (error) {
-      if (error?.name === "AbortError") throw error;
-      lastError = error instanceof Error ? error : lastError;
-    }
+  if (controller.signal.aborted) {
+    throw new DOMException("Generation stopped", "AbortError");
   }
-  throw lastError;
+
+  const response = await fetch(`${ENDPOINT}?stream=true`, {
+    method: "POST",
+    headers: {
+      Accept: "text/event-stream, text/plain, application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messages: getChatHistory(prompt),
+      model: "openai",
+    }),
+    signal: controller.signal,
+  });
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!response.ok || contentType.includes("text/html")) {
+    if (response.body?.cancel) await response.body.cancel();
+    throw new Error("Primary external signal unavailable");
+  }
+
+  return response;
 };
 
 const streamAnswer = async (prompt, assistant, controller, generation) => {
   try {
+    const localResponse = getTierOneResponse(prompt);
+    if (localResponse) {
+      assistant.content = cleanAssistantOutput(localResponse);
+      assistant.streaming = false;
+      state.isStreaming = false;
+      state.controller = null;
+      state.streamingMessageId = null;
+      state.error = "";
+      save();
+      renderMessages(true);
+      updateStatus();
+      refreshTransportButton();
+      return;
+    }
+
     await systemPromptReady;
     const response = await requestResponse(prompt, controller);
     await consumeResponse(response, assistant, controller);
@@ -600,7 +881,8 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
     state.controller = null;
     state.streamingMessageId = null;
     state.error = "";
-    if (!assistant.content.trim()) assistant.content = "No signal returned. Try transmitting again.";
+    assistant.content = cleanAssistantOutput(assistant.content)
+      || "No signal returned. Try transmitting again.";
     save();
     renderMessages(true);
     updateStatus();
@@ -608,16 +890,20 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
   } catch (error) {
     if (generation !== wipeGeneration) return;
     const stopped = error?.name === "AbortError" || controller.signal.aborted;
-    assistant.content = assistant.content || (stopped
-      ? "Generation stopped by operator."
-      : "The text service could not return a response.");
+    if (stopped) {
+      assistant.content = cleanAssistantOutput(assistant.content)
+        || "Generation stopped by operator.";
+    } else {
+      assistant.content = cleanAssistantOutput(getOfflineResponse(prompt));
+    }
     assistant.streaming = false;
     state.isStreaming = false;
     state.controller = null;
     state.streamingMessageId = null;
     state.error = stopped
       ? "Generation stopped. The partial response remains in the console."
-      : "Connection issue: the text endpoint could not be reached. Check your network and try again.";
+      : "";
+    state.showOfflineModal = !stopped;
     save();
     render();
   }
@@ -729,6 +1015,11 @@ const bindEvents = () => {
         render();
         return;
       }
+      if (action === "offline-dismiss") {
+        state.showOfflineModal = false;
+        render();
+        return;
+      }
       if (action === "delete-confirm") {
         deleteAll();
         return;
@@ -776,26 +1067,28 @@ const bindEvents = () => {
     updateComposer();
   }
 
-  const modal = document.querySelector("[data-modal-backdrop]");
-  if (modal) {
+  document.querySelectorAll("[data-modal-backdrop]").forEach((modal) => {
+    const offlineModal = modal.hasAttribute("data-offline-backdrop");
     const dialog = modal.querySelector(".modal");
     if (dialog) {
       dialog.tabIndex = -1;
       dialog.focus();
       dialog.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
-          state.showDeleteModal = false;
+          if (offlineModal) state.showOfflineModal = false;
+          else state.showDeleteModal = false;
           render();
         }
       });
     }
     modal.addEventListener("click", (event) => {
       if (event.target === modal) {
-        state.showDeleteModal = false;
+        if (offlineModal) state.showOfflineModal = false;
+        else state.showDeleteModal = false;
         render();
       }
     });
-  }
+  });
 };
 
 render();

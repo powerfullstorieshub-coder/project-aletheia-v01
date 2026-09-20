@@ -1,2 +1,3 @@
 - [Imported app registration](imported-app-registration.md) — private GitHub imports need artifact registration through the artifact workflow before managed previews can start.
 - [Pollinations streaming](pollinations-streaming.md) — prefer the public streaming GET; a plain POST can return an HTML gateway response with HTTP 200.
+- [Preview smoke testing](preview-smoke.md) — proxied Chromium automation may restrict localStorage; isolate tests by navigation instead.
