@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "VÆRIXON"
+description = "A focused AI interface with Reality and Matrix modes, streaming responses, offline knowledge, saved sessions, and a cinematic visual system."
+version = "1.0.0"
+id = "artifacts/vaerixon"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22014
+
+[services.development]
+run = "pnpm --filter @workspace/vaerixon run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/vaerixon", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/vaerixon/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22014"
+BASE_PATH = "/"
