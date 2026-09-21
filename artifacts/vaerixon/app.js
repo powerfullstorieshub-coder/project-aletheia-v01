@@ -18,6 +18,8 @@ const freshState = () => ({
   isStreaming: false,
   error: "",
   zeroed: false,
+  showSettings: false,
+  settingsView: "root",
   showDeleteModal: false,
   showOfflineModal: false,
   controller: null,
@@ -643,11 +645,49 @@ const matrixCanvas = () => {
   frame = requestAnimationFrame(draw);
 };
 
+const settingsMarkup = () => {
+  if (!state.showSettings) return "";
+
+  if (state.settingsView === "privacy") {
+    return `
+      <div class="settings-backdrop" data-settings-backdrop>
+        <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
+          <div class="settings-header">
+            <button class="settings-back" data-action="settings-back" aria-label="Back to Settings">BACK</button>
+            <button class="settings-close" data-action="settings-close" aria-label="Close Settings">×</button>
+          </div>
+          <div class="settings-kicker">Settings</div>
+          <h2 id="privacy-title">Privacy &amp; Data</h2>
+          <div class="settings-actions">
+            <button class="settings-action danger" data-action="delete-open">Delete All</button>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="settings-backdrop" data-settings-backdrop>
+      <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="settings-header">
+          <div class="settings-kicker">Settings</div>
+          <button class="settings-close" data-action="settings-close" aria-label="Close Settings">×</button>
+        </div>
+        <h2 id="settings-title">Settings</h2>
+        <button class="settings-section" data-action="settings-privacy">
+          <span>Privacy &amp; Data</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      </section>
+    </div>
+  `;
+};
+
 const consoleMarkup = () => `
   <div class="app mode-${state.mode}">
     <header class="topbar">
       <div>
-        <a class="brand" href="/" data-action="home">VÆRIXON <span class="brand-mark">/ 0.5</span><span class="brand-subtitle">Wake up to Reality.</span></a>
+        <a class="brand" href="/" data-action="home">VÆRIXON<span class="brand-subtitle">Wake up to Reality.</span></a>
       </div>
       <div class="mode-switch" role="group" aria-label="Interface mode">
         <button class="mode-button" aria-pressed="${state.mode === "reality"}" data-action="mode" data-mode="reality">[ REALITY MODE ]</button>
@@ -655,12 +695,13 @@ const consoleMarkup = () => `
       </div>
       <div class="top-actions">
         <div class="system-state" aria-live="polite"><span class="state-dot"></span><span>${state.isStreaming ? "streaming" : "system ready"}</span></div>
+        <button class="settings-button" data-action="settings-open" aria-label="Open Settings">SETTINGS</button>
       </div>
     </header>
     <main class="workspace">
       <div class="console-head">
         <div>
-          <div class="eyebrow">${state.mode === "matrix" ? "Perception layer // active" : "Intelligence console // ready"}</div>
+          ${state.mode === "matrix" ? "" : '<div class="eyebrow">Intelligence console // ready</div>'}
           <h1 class="console-title">${state.mode === "matrix" ? "See the signal." : "Make it precise."}</h1>
         </div>
         <p class="console-note">${state.mode === "matrix" ? "A high-contrast interface for pattern, possibility, and raw analysis." : "A focused interface for decisions, explanations, and useful first drafts."}</p>
@@ -677,17 +718,18 @@ const consoleMarkup = () => `
       </section>
     </main>
     <footer class="footer"><span>PRIVATE SESSION</span><span>NO ACCOUNT REQUIRED</span></footer>
-    <button class="emergency-delete" data-action="delete-open">DELETE ALL</button>
     ${state.error ? `<div class="error-banner" role="alert">${escapeHTML(state.error)}</div>` : ""}
+    ${settingsMarkup()}
     ${state.showDeleteModal ? `
       <div class="modal-backdrop" data-modal-backdrop>
         <section class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-title">
-          <div class="modal-kicker">Irreversible operation</div>
-          <h2 id="delete-title">Confirm Absolute Data Wipe?</h2>
-          <p>All chats, session cache, and neural context will be permanently destroyed.</p>
+          <button class="modal-close" data-action="delete-cancel" aria-label="Close confirmation">×</button>
+          <div class="modal-kicker">Privacy &amp; Data</div>
+          <h2 id="delete-title">Delete all data?</h2>
+          <p>Are you sure you want to delete all data?</p>
           <div class="modal-actions">
-            <button data-action="delete-cancel">Keep signal</button>
-            <button class="danger" data-action="delete-confirm">Delete all</button>
+            <button data-action="delete-cancel">CANCEL</button>
+            <button class="danger" data-action="delete-confirm">DELETE</button>
           </div>
         </section>
       </div>
@@ -1005,6 +1047,28 @@ const bindEvents = () => {
         render();
         return;
       }
+      if (action === "settings-open") {
+        state.showSettings = true;
+        state.settingsView = "root";
+        render();
+        return;
+      }
+      if (action === "settings-close") {
+        state.showSettings = false;
+        state.settingsView = "root";
+        render();
+        return;
+      }
+      if (action === "settings-privacy") {
+        state.settingsView = "privacy";
+        render();
+        return;
+      }
+      if (action === "settings-back") {
+        state.settingsView = "root";
+        render();
+        return;
+      }
       if (action === "delete-open") {
         state.showDeleteModal = true;
         render();
@@ -1085,6 +1149,16 @@ const bindEvents = () => {
       if (event.target === modal) {
         if (offlineModal) state.showOfflineModal = false;
         else state.showDeleteModal = false;
+        render();
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-settings-backdrop]").forEach((backdrop) => {
+    backdrop.addEventListener("click", (event) => {
+      if (event.target === backdrop) {
+        state.showSettings = false;
+        state.settingsView = "root";
         render();
       }
     });

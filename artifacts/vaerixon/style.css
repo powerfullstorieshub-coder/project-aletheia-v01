@@ -179,6 +179,20 @@ html[data-mode="matrix"] #matrixCanvas {
   gap: 18px;
 }
 
+.settings-button {
+  padding: 7px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-button:hover {
+  color: var(--accent);
+}
+
 .system-state {
   display: flex;
   align-items: center;
@@ -770,25 +784,6 @@ html[data-mode="matrix"] #matrixCanvas {
   color: #FFFFFF;
 }
 
-.emergency-delete {
-  position: fixed;
-  right: clamp(18px, 4vw, 64px);
-  bottom: 22px;
-  z-index: 4;
-  padding: 11px 14px;
-  border: 1px solid #c43d3d;
-  border-radius: 2px;
-  background: var(--danger);
-  color: #fff8f4;
-  font: 10px var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.emergency-delete:hover {
-  background: #8f2424;
-}
-
 .zeroed-screen {
   display: grid;
   min-height: 100dvh;
@@ -848,12 +843,33 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .modal {
+  position: relative;
   width: min(425px, 100%);
   padding: 25px;
   border: 1px solid var(--line-strong);
   background: var(--paper);
   color: var(--ink);
   box-shadow: 0 18px 60px rgba(9, 17, 20, 0.25);
+}
+
+.modal-close,
+.settings-close {
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 22px/1 var(--font-sans);
+}
+
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 17px;
+  padding: 4px;
+}
+
+.modal-close:hover,
+.settings-close:hover {
+  color: var(--ink);
 }
 
 .modal-kicker {
@@ -905,6 +921,98 @@ html[data-mode="matrix"] #matrixCanvas {
 .modal-actions .danger:hover {
   background: var(--accent);
   color: var(--paper);
+}
+
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: start end;
+  padding: 92px clamp(18px, 4vw, 64px) 20px;
+  background: rgba(0, 0, 0, 0.48);
+}
+
+.settings-panel {
+  width: min(360px, 100%);
+  padding: 22px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+}
+
+.settings-kicker {
+  color: var(--accent);
+  font: 10px var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.settings-close {
+  padding: 0 3px;
+}
+
+.settings-back {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-back:hover {
+  color: var(--accent);
+}
+
+.settings-panel h2 {
+  margin: 22px 0 18px;
+  font: 700 24px var(--font-display);
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
+}
+
+.settings-section,
+.settings-action {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: 12px var(--font-mono);
+  text-align: left;
+}
+
+.settings-section:hover {
+  color: var(--accent);
+}
+
+.settings-actions {
+  border-top: 1px solid var(--line);
+}
+
+.settings-action {
+  justify-content: flex-start;
+  border-top: 0;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.settings-action:hover {
+  color: var(--ink);
 }
 
 @media (max-width: 700px) {
@@ -975,8 +1083,7 @@ html[data-mode="matrix"] #matrixCanvas {
     display: none;
   }
 
-  .emergency-delete {
-    right: 18px;
-    bottom: 18px;
+  .settings-backdrop {
+    padding: 84px 18px 18px;
   }
 }
