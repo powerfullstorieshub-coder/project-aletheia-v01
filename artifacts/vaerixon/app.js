@@ -1,4 +1,8 @@
 import "./style.css";
+import {
+  createConversationMemory,
+  getMessageContent,
+} from "./conversation-memory.js";
 import { getLocalKnowledgeResponse } from "./knowledge/index.js";
 import { buildResearchFallback, decideResearchRoute } from "./research-routing.js";
 
@@ -7,30 +11,29 @@ const canvas = document.getElementById("matrixCanvas");
 const STORAGE_KEY = "vaerixon-console-v015";
 const ENDPOINT = "https://text.pollinations.ai/";
 
-const emptySessions = () => ({
-  reality: [],
-  matrix: [],
-});
-
-const freshState = () => ({
-  mode: "reality",
-  sessions: emptySessions(),
-  messages: [],
-  draft: "",
-  isStreaming: false,
-  error: "",
-  zeroed: false,
-  showSettings: false,
-  settingsView: "root",
-  showDeleteModal: false,
-  showOfflineModal: false,
-  controller: null,
-  streamingMessageId: null,
-});
+const freshState = () => {
+  const memory = createConversationMemory();
+  return {
+    mode: "reality",
+    memory,
+    messages: memory.getMessages("reality"),
+    draft: "",
+    isStreaming: false,
+    error: "",
+    zeroed: false,
+    showSettings: false,
+    settingsView: "root",
+    showDeleteModal: false,
+    showOfflineModal: false,
+    controller: null,
+    streamingMessageId: null,
+  };
+};
 
 let state = freshState();
 let wipeGeneration = 0;
 let stopMatrixRain = () => {};
+let matrixRainRunning = false;
 let systemPrompt = "";
 const activeControllers = new Set();
 
@@ -74,10 +77,10 @@ const safeClear = (storage) => {
 };
 
 const save = () => {
-  state.sessions[state.mode] = state.messages;
+  state.messages = state.memory.setMessages(state.mode, state.messages);
   safeWrite(localStorage, STORAGE_KEY, JSON.stringify({
     mode: state.mode,
-    sessions: state.sessions,
+    sessions: state.memory.serialize(),
   }));
 };
 
@@ -86,26 +89,14 @@ const loadSavedState = () => {
     const saved = JSON.parse(safeRead(localStorage, STORAGE_KEY) || "null");
     if (!saved) return;
     state.mode = saved.mode === "matrix" ? "matrix" : "reality";
-    const cleanMessages = (messages) => Array.isArray(messages)
-      ? messages.filter((message) => (
-        message
-        && message.role
-        && typeof message.content === "string"
-        && !message.streaming
-      ))
-      : [];
-
-    if (saved.sessions && typeof saved.sessions === "object") {
-      state.sessions = {
-        reality: cleanMessages(saved.sessions.reality),
-        matrix: cleanMessages(saved.sessions.matrix),
-      };
-    } else {
-      // Migrate the previous single-session format into its saved mode.
-      state.sessions = emptySessions();
-      state.sessions[state.mode] = cleanMessages(saved.messages);
+    const sessions = saved.sessions && typeof saved.sessions === "object"
+      ? saved.sessions
+      : { reality: [], matrix: [] };
+    if (!saved.sessions && Array.isArray(saved.messages)) {
+      sessions[state.mode] = saved.messages;
     }
-    state.messages = state.sessions[state.mode];
+    state.memory = createConversationMemory(sessions);
+    state.messages = state.memory.getMessages(state.mode);
   } catch {
     state = freshState();
   }
@@ -457,19 +448,13 @@ const getModeInstruction = (analysis, route = {}) => {
 };
 
 const getChatHistory = (prompt, analysis = understandRequest(prompt), route = {}) => {
-  const previousMessages = state.messages
-    .filter((message) => (
-      !message.streaming
-      && (message.role === "user" || message.role === "assistant")
-      && typeof message.content === "string"
-      && message.content.trim()
-    ))
-    .slice(0, -1)
-    .slice(-24)
+  const previousMessages = state.memory
+    .context(state.mode, prompt)
     .map((message) => ({
       role: message.role,
-      content: cleanAssistantOutput(message.content),
-    }));
+      content: cleanAssistantOutput(getMessageContent(message, state.messages)),
+    }))
+    .filter((message) => message.content);
 
   return [
     { role: "system", content: getModeInstruction(analysis, route) },
@@ -579,10 +564,11 @@ const formatTime = (timestamp) => new Intl.DateTimeFormat(undefined, {
 
 const renderMessage = (message) => {
   const assistant = message.role === "assistant";
+  const messageContent = getMessageContent(message, state.messages);
   const content = assistant
-    ? markdown(message.content)
-    : `<p>${inlineMarkdown(message.content).replace(/\n/g, "<br>")}</p>`;
-  const typing = message.streaming && !message.content
+    ? markdown(messageContent)
+    : `<p>${inlineMarkdown(messageContent).replace(/\n/g, "<br>")}</p>`;
+  const typing = message.streaming && !messageContent
     ? '<span class="typing" aria-label="Generating">STREAMING</span>'
     : "";
   const streamLabel = message.streaming ? " · LIVE" : "";
@@ -625,8 +611,7 @@ const renderMessages = (shouldScroll = true) => {
 };
 
 const matrixCanvas = () => {
-  stopMatrixRain();
-  if (!canvas || state.mode !== "matrix") return;
+  if (!canvas || state.mode !== "matrix" || matrixRainRunning) return;
 
   const context = canvas.getContext("2d", { alpha: false });
   if (!context) return;
@@ -737,16 +722,19 @@ const matrixCanvas = () => {
   };
 
   const destroy = () => {
+    if (!matrixRainRunning) return;
     stopped = true;
     cancelAnimationFrame(frame);
     window.removeEventListener("resize", resize);
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, canvas.width, canvas.height);
+    matrixRainRunning = false;
     stopMatrixRain = () => {};
   };
 
   resize();
   window.addEventListener("resize", resize, { passive: true });
+  matrixRainRunning = true;
   stopMatrixRain = destroy;
   frame = requestAnimationFrame(draw);
 };
@@ -904,7 +892,8 @@ const addMessage = (role, content, extra = {}) => {
     createdAt: Date.now(),
     ...extra,
   };
-  state.messages.push(message);
+  state.memory.append(state.mode, message);
+  state.messages = state.memory.getMessages(state.mode);
   save();
   return message;
 };
@@ -1125,9 +1114,24 @@ const sendPrompt = async (value) => {
   const prompt = String(value || "").trim();
   if (!prompt || state.isStreaming) return;
 
+  const classification = state.memory.classify(state.mode, prompt);
   state.draft = "";
   state.error = "";
-  const userMessage = addMessage("user", prompt);
+  addMessage("user", prompt);
+
+  if (classification.kind === "exact" && classification.answerMessage) {
+    addMessage("assistant", "", {
+      reuseOf: classification.answerMessage.id,
+      reused: true,
+    });
+    state.isStreaming = false;
+    state.controller = null;
+    state.streamingMessageId = null;
+    save();
+    render();
+    return;
+  }
+
   const assistant = addMessage("assistant", "", { streaming: true });
   const controller = new AbortController();
   const generation = wipeGeneration;
@@ -1149,7 +1153,6 @@ const sendPrompt = async (value) => {
       state.isStreaming = false;
     }
   }
-  void userMessage;
 };
 
 const deleteAll = () => {
@@ -1180,9 +1183,9 @@ const bindEvents = () => {
       }
       if (action === "mode") {
         if (state.isStreaming || state.mode === element.dataset.mode) return;
-        state.sessions[state.mode] = state.messages;
+        state.messages = state.memory.setMessages(state.mode, state.messages);
         state.mode = element.dataset.mode;
-        state.messages = state.sessions[state.mode] || [];
+        state.messages = state.memory.getMessages(state.mode);
         state.draft = "";
         state.error = "";
         save();
