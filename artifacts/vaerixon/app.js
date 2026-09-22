@@ -1,4 +1,5 @@
 import "./style.css";
+import { getLocalKnowledgeResponse } from "./knowledge/index.js";
 
 const root = document.getElementById("root");
 const canvas = document.getElementById("matrixCanvas");
@@ -45,81 +46,6 @@ const MODE_PROMPTS = {
     "For mathematics, show every meaningful step, explain the rule used, and verify the result.",
     "Increase depth for genuinely complex work, but do not add detail merely to sound more intelligent.",
   ].join(" "),
-};
-
-const OFFLINE_KNOWLEDGE = {
-  neuron: {
-    aliases: ["neurons", "nerve cell", "nerve cells"],
-    answer: "**Neurons** are specialized cells that receive, process, and transmit information.\n\n1. **Dendrites** receive signals from other cells.\n2. The **cell body** integrates those signals.\n3. If the combined signal reaches threshold, the **axon** carries an electrical impulse.\n4. **Synapses** pass the signal to the next cell using chemical or electrical communication.\n\nThis structure lets nervous systems turn sensory input into coordinated thought, movement, and behavior.",
-  },
-  synapse: {
-    aliases: ["synapses", "synaptic"],
-    answer: "A **synapse** is the communication junction between a neuron and another neuron, muscle, or gland.\n\nWhen an action potential reaches the presynaptic terminal, it can release neurotransmitters into the synaptic gap. Those molecules bind to receptors on the next cell and either increase or decrease its chance of firing. Synapses are therefore not just wires; they are adjustable decision points that support learning and memory.",
-  },
-  "action potential": {
-    aliases: ["action potentials", "nerve impulse", "nerve impulses"],
-    answer: "An **action potential** is a rapid, temporary reversal of electrical charge across a neuron's membrane.\n\n1. A stimulus depolarizes the membrane toward threshold.\n2. Voltage-gated sodium channels open, causing rapid depolarization.\n3. Sodium channels inactivate while potassium channels open.\n4. Potassium leaves the cell, producing repolarization and a brief undershoot.\n5. The refractory period helps the signal travel in one direction.\n\nIt is an all-or-nothing event: stronger inputs usually increase firing frequency rather than the size of each impulse.",
-  },
-  "brain lobes": {
-    aliases: ["brain lobe", "frontal lobe", "parietal lobe", "temporal lobe", "occipital lobe"],
-    answer: "The cerebral cortex is commonly described through four major lobes:\n\n- **Frontal lobe:** planning, decision-making, voluntary movement, speech production, and inhibition.\n- **Parietal lobe:** body sensation, spatial processing, and integration of sensory information.\n- **Temporal lobe:** hearing, language comprehension, memory, and aspects of emotion.\n- **Occipital lobe:** visual processing.\n\nThese functions overlap across networks, so the lobes are useful anatomical guides rather than isolated boxes.",
-  },
-  dna: {
-    aliases: ["deoxyribonucleic acid"],
-    answer: "**DNA** stores hereditary information in the sequence of its nucleotide bases: adenine, thymine, cytosine, and guanine.\n\nIts double-helix structure allows each strand to serve as a template for copying. Specific DNA sequences can be transcribed into RNA, and many RNA molecules guide the production of proteins. Regulation around those sequences helps determine when and where genes are used.",
-  },
-  rna: {
-    aliases: ["ribonucleic acid", "messenger rna", "mrna"],
-    answer: "**RNA** is a nucleic acid with many roles in gene expression.\n\nMessenger RNA carries a transcribed sequence from DNA. Ribosomal RNA forms much of the ribosome, and transfer RNA helps match amino acids to codons during protein synthesis. Other RNA molecules regulate genes, process transcripts, or catalyze reactions. Unlike DNA, RNA usually exists as a single strand and uses uracil instead of thymine.",
-  },
-  "cellular respiration": {
-    aliases: ["cell respiration", "aerobic respiration"],
-    answer: "**Cellular respiration** converts energy in nutrients into ATP, the cell's immediately usable energy currency.\n\n1. **Glycolysis** splits glucose in the cytoplasm and produces a small amount of ATP and NADH.\n2. The **citric acid cycle** processes acetyl-CoA and loads electron carriers.\n3. The **electron transport chain** uses those carriers to build a proton gradient.\n4. **ATP synthase** uses the gradient to produce most of the ATP.\n\nOxygen serves as the final electron acceptor in aerobic respiration, forming water.",
-  },
-  "quantum mechanics": {
-    aliases: ["quantum mechanic", "quantum physics"],
-    answer: "**Quantum mechanics** describes matter and energy at atomic and subatomic scales.\n\nIts central ideas include quantized energy levels, wave-particle duality, superposition, probability amplitudes, and measurement limits. The theory predicts probabilities for possible outcomes rather than a single classical trajectory. It is counterintuitive at human scales but exceptionally accurate for atoms, electrons, photons, and many modern technologies.",
-  },
-  "general relativity": {
-    aliases: ["einstein relativity", "relativity"],
-    answer: "**General relativity** describes gravity as the curvature of spacetime caused by energy and mass.\n\nObjects follow the straightest available paths through curved spacetime, which appears to us as gravitational attraction. The theory predicts gravitational time dilation, the bending of light, black holes, and gravitational waves. In weak fields and at low speeds, it approaches Newtonian gravity.",
-  },
-  "black holes": {
-    aliases: ["black hole", "event horizon", "event horizons"],
-    answer: "A **black hole** is a region of spacetime from which nothing that crosses the event horizon can escape to the outside universe.\n\nIt forms when enough mass is compressed that escape would require a speed greater than light. The event horizon is not a solid surface; it is a causal boundary. Around it, infalling matter can form a hot accretion disk, and the system can release powerful radiation before matter crosses the horizon.",
-  },
-  "big bang theory": {
-    aliases: ["big bang", "early universe", "cosmological expansion"],
-    answer: "The **Big Bang theory** describes the evolution of the observable universe from an earlier hot, dense state.\n\nEvidence includes the expansion of space, the cosmic microwave background, and the observed abundance of light elements. It does not describe an explosion into pre-existing space; it describes space itself expanding. The theory explains the universe's development from its early state, while questions about the absolute beginning remain active areas of cosmology.",
-  },
-  gravity: {
-    aliases: ["gravitational force", "gravitation"],
-    answer: "**Gravity** is the interaction that causes mass and energy to influence motion.\n\nIn Newtonian physics, two masses attract with a force proportional to the product of their masses and inversely proportional to the square of their separation. In general relativity, gravity is the geometry of spacetime. Both descriptions are useful, with relativity becoming essential for very strong fields, high precision, or cosmological scales.",
-  },
-  "scientific method": {
-    aliases: ["science method", "scientific reasoning"],
-    answer: "The **scientific method** is a disciplined way to build and test explanations.\n\n1. Observe a pattern or ask a focused question.\n2. Form a hypothesis that makes testable predictions.\n3. Collect evidence under controlled conditions where possible.\n4. Compare the evidence with the prediction.\n5. Revise, replicate, and communicate the result.\n\nIt is not a rigid single sequence; its core is transparent reasoning that can be checked and corrected by others.",
-  },
-  "critical thinking": {
-    aliases: ["critical reasoning", "reason critically"],
-    answer: "**Critical thinking** means evaluating claims by separating evidence, assumptions, inference, and conclusion.\n\nAsk what the claim means, what evidence supports it, what evidence would change your mind, whether the source is reliable, and whether the conclusion is stronger than the evidence allows. Good critical thinking is not automatic skepticism; it is proportioning confidence to the quality of the reasons.",
-  },
-  "deductive reasoning": {
-    aliases: ["deduction", "deductive logic"],
-    answer: "**Deductive reasoning** starts with premises and derives a conclusion that must be true if the premises are true and the argument form is valid.\n\nExample:\n- All mammals are warm-blooded.\n- Whales are mammals.\n- Therefore, whales are warm-blooded.\n\nA deduction can be logically valid even if a premise is false, so soundness requires both a valid structure and true premises.",
-  },
-  "inductive reasoning": {
-    aliases: ["induction", "inductive logic"],
-    answer: "**Inductive reasoning** generalizes from observations to a conclusion that is supported but not guaranteed.\n\nSeeing many well-tested cases can justify confidence that a pattern will continue, but it cannot provide the absolute certainty of a valid deduction. Strong induction uses representative evidence, considers alternatives, and states its uncertainty clearly.",
-  },
-  probability: {
-    aliases: ["probabilities", "probability theory"],
-    answer: "**Probability** measures uncertainty from 0 to 1, or equivalently from 0% to 100%.\n\nFor equally likely outcomes, probability is favorable outcomes divided by total outcomes. Conditional probability updates a belief when new information is known: P(A|B) = P(A and B) / P(B). A careful solution defines the events first, identifies independence assumptions, and keeps the denominator consistent with the information available.",
-  },
-  algorithms: {
-    aliases: ["algorithm", "algorithmic thinking"],
-    answer: "An **algorithm** is a finite, unambiguous procedure for solving a problem or transforming input into output.\n\nA useful algorithm specifies the steps, handles edge cases, and terminates. Its efficiency is often described with time and space complexity, such as O(n) for work that grows linearly with input size. The best choice balances correctness, performance, clarity, and the constraints of the problem.",
-  },
 };
 
 const safeRead = (storage, key) => {
@@ -246,13 +172,31 @@ const understandRequest = (prompt) => {
   const hasTutorial = /\b(?:how do i|how to|learn|tutorial|steps|roadmap|guide|teach me)\b/i.test(normalized);
   const hasDecision = /\b(?:should i|decide|decision|recommend|recommendation|choose|trade off|tradeoff)\b/i.test(normalized);
   const hasProblemSolving = /\b(?:solve|fix|debug|work through|figure out|plan|analyze|analyse)\b/i.test(normalized);
+  const explicitAdvanced = /\b(?:advanced|expert|deep|deeply|thorough|in depth|comprehensive)\b/i.test(raw);
+  const explicitIntermediate = /\b(?:intermediate|working knowledge)\b/i.test(raw);
+  const explicitBasic = /\b(?:basic|beginner|introductory|introduction)\b/i.test(raw);
   const complexitySignals = [
     wordCount > 32,
     raw.length > 220,
     /\b(?:complex|advanced|multiple|several|constraints|requirements|edge cases|in detail)\b/i.test(raw),
     (raw.match(/\band\b/gi) || []).length >= 2,
   ].filter(Boolean).length;
-  const complexity = complexitySignals >= 2 ? "complex" : wordCount <= 10 ? "simple" : "moderate";
+  const complexity = explicitAdvanced || complexitySignals >= 2
+    ? "complex"
+    : wordCount <= 10
+      ? "simple"
+      : "moderate";
+  const depth = explicitAdvanced || inferAudience(raw) === "expert"
+    ? "advanced"
+    : explicitIntermediate
+      ? "intermediate"
+      : explicitBasic || ["child", "beginner"].includes(inferAudience(raw))
+        ? "basic"
+        : complexity === "complex"
+          ? "advanced"
+          : complexity === "moderate"
+            ? "intermediate"
+            : "basic";
   const requestType = isPromptRequest
     ? "creation"
     : REQUEST_TYPE_PATTERNS.creation.test(raw)
@@ -306,6 +250,7 @@ const understandRequest = (prompt) => {
     requestType,
     taskType,
     complexity,
+    depth,
     audience,
     responseLength,
     responseShape,
@@ -478,62 +423,7 @@ const getOfflineMathResponse = (prompt) => {
   ].join("\n");
 };
 
-const getPromptBuildingResponse = () => [
-  "Here is a copy-ready prompt:",
-  "",
-  "### Task",
-  "Act as a business analyst. Analyze my business and produce a practical assessment of its current position, opportunities, risks, and highest-leverage next actions.",
-  "",
-  "### Context",
-  "Use the business information I provide, including the product or service, target customers, market, business model, current performance, constraints, and goals. Separate known facts from assumptions and identify the most important missing information.",
-  "",
-  "### Persona",
-  "Think like a rigorous, commercially aware business analyst. Be objective, evidence-led, and practical rather than motivational.",
-  "",
-  "### Format",
-  "Structure the response as: executive summary; key assumptions; strengths; weaknesses; opportunities; risks; prioritized recommendations; and a 30/60/90-day action plan. Explain the reasoning behind each priority and flag uncertainty.",
-  "",
-  "### Tone",
-  "Professional, clear, direct, and constructive. Avoid generic advice and unsupported claims.",
-].join("\n");
-
-const getAdaptiveOfflineResponse = (prompt, analysis) => {
-  const normalized = normalizePrompt(prompt);
-  if (analysis.taskType === "math") return getOfflineMathResponse(prompt);
-  if (analysis.taskType === "prompt-building") return getPromptBuildingResponse();
-  if (/\b(?:learn|learning|study|roadmap|path)\b/.test(normalized) && /\bpython\b/.test(normalized)) {
-    return [
-      "A practical Python learning path:",
-      "",
-      "1. **Weeks 1–2 — Foundations:** variables, strings, numbers, booleans, conditionals, loops, and functions.",
-      "2. **Weeks 3–4 — Working with data:** lists, dictionaries, files, exceptions, modules, and basic debugging.",
-      "3. **Weeks 5–6 — Build small projects:** a command-line tool, a data report, and one project connected to your interests.",
-      "4. **Next — Choose a direction:** automation, web development, data analysis, or machine learning.",
-      "",
-      "Study by writing code daily, reviewing errors, and finishing small projects. Do not wait to master every feature before building.",
-    ].join("\n");
-  }
-  if (/\bgravity\b/.test(normalized) && analysis.audience === "child") {
-    return [
-      "**Gravity** is the invisible pull that makes things fall toward Earth.",
-      "",
-      "Earth is very massive, so it pulls on you, your toys, and the air around you. Gravity also keeps the Moon moving around Earth and Earth moving around the Sun. The farther away something is, the weaker Earth's pull becomes.",
-    ].join("\n");
-  }
-  return "";
-};
-
 const getOfflineResponse = (prompt, analysis = understandRequest(prompt)) => {
-  const adaptiveResponse = getAdaptiveOfflineResponse(prompt, analysis);
-  if (adaptiveResponse) return adaptiveResponse;
-
-  const normalized = normalizePrompt(prompt);
-  const entry = Object.entries(OFFLINE_KNOWLEDGE).find(([topic, knowledge]) => (
-    [topic, ...knowledge.aliases].some((term) => normalized.includes(term))
-  ));
-
-  if (entry) return entry[1].answer;
-
   const mathResponse = getOfflineMathResponse(prompt);
   if (mathResponse) return mathResponse;
 
@@ -1097,6 +987,7 @@ const requestResponse = async (prompt, controller, analysis = understandRequest(
 };
 
 const streamAnswer = async (prompt, assistant, controller, generation) => {
+  const analysis = understandRequest(prompt);
   try {
     const localResponse = getTierOneResponse(prompt);
     if (localResponse) {
@@ -1113,7 +1004,21 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
       return;
     }
 
-    const analysis = understandRequest(prompt);
+    const localKnowledgeResponse = await getLocalKnowledgeResponse(prompt, analysis, state.mode);
+    if (localKnowledgeResponse) {
+      assistant.content = cleanAssistantOutput(localKnowledgeResponse);
+      assistant.streaming = false;
+      state.isStreaming = false;
+      state.controller = null;
+      state.streamingMessageId = null;
+      state.error = "";
+      save();
+      renderMessages(true);
+      updateStatus();
+      refreshTransportButton();
+      return;
+    }
+
     await systemPromptReady;
     const response = await requestResponse(prompt, controller, analysis);
     await consumeResponse(response, assistant, controller);
@@ -1136,7 +1041,7 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
       assistant.content = cleanAssistantOutput(assistant.content)
         || "Generation stopped by operator.";
     } else {
-      assistant.content = cleanAssistantOutput(getOfflineResponse(prompt, understandRequest(prompt)));
+      assistant.content = cleanAssistantOutput(getOfflineResponse(prompt, analysis));
     }
     assistant.streaming = false;
     state.isStreaming = false;
