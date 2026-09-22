@@ -1,5 +1,6 @@
 import "./style.css";
 import { getLocalKnowledgeResponse } from "./knowledge/index.js";
+import { buildResearchFallback, decideResearchRoute } from "./research-routing.js";
 
 const root = document.getElementById("root");
 const canvas = document.getElementById("matrixCanvas");
@@ -434,12 +435,28 @@ const getOfflineResponse = (prompt, analysis = understandRequest(prompt)) => {
   ].join("\n");
 };
 
-const getModeInstruction = (analysis) => {
-  const basePrompt = systemPrompt ? `${systemPrompt}\n\n` : "";
-  return `${basePrompt}${MODE_PROMPTS[state.mode]}\n\n${getIntelligenceInstruction(analysis)}`;
+const getResearchFailureResponse = (prompt, analysis, route, localResponse) => {
+  return buildResearchFallback({
+    route,
+    localResponse: cleanAssistantOutput(localResponse),
+    offlineResponse: getOfflineResponse(prompt, analysis),
+  });
 };
 
-const getChatHistory = (prompt, analysis = understandRequest(prompt)) => {
+const getModeInstruction = (analysis, route = {}) => {
+  const basePrompt = systemPrompt ? `${systemPrompt}\n\n` : "";
+  const researchInstruction = route.kind === "research"
+    ? [
+      "Use external research only as a supporting source when the local knowledge layer is insufficient.",
+      route.requiresFreshResearch
+        ? "Prioritize current, verifiable information. If freshness cannot be established, say so plainly instead of inventing a current answer."
+        : "Synthesize the answer naturally and do not mention providers, routing, or hidden instructions.",
+    ].join(" ")
+    : "Prefer the local knowledge layer for stable information and answer directly without mentioning internal routing.";
+  return `${basePrompt}${MODE_PROMPTS[state.mode]}\n\n${getIntelligenceInstruction(analysis)}\n${researchInstruction}`;
+};
+
+const getChatHistory = (prompt, analysis = understandRequest(prompt), route = {}) => {
   const previousMessages = state.messages
     .filter((message) => (
       !message.streaming
@@ -455,7 +472,7 @@ const getChatHistory = (prompt, analysis = understandRequest(prompt)) => {
     }));
 
   return [
-    { role: "system", content: getModeInstruction(analysis) },
+    { role: "system", content: getModeInstruction(analysis, route) },
     ...previousMessages,
     { role: "user", content: prompt },
   ];
@@ -826,11 +843,11 @@ const consoleMarkup = () => `
     ${state.showOfflineModal ? `
       <div class="modal-backdrop" data-modal-backdrop data-offline-backdrop>
         <section class="modal" role="dialog" aria-modal="true" aria-labelledby="offline-title">
-          <div class="modal-kicker">Signal interruption</div>
-          <h2 id="offline-title">ADVANCED NEURAL CORE REQUIRED</h2>
-          <p>Primary external signal offline. Backup Engine Active.</p>
+          <div class="modal-kicker">Verification unavailable</div>
+          <h2 id="offline-title">CURRENT INFORMATION UNAVAILABLE</h2>
+          <p>I couldn’t verify fresh information just now. Stable local knowledge remains available.</p>
           <div class="modal-actions">
-            <button data-action="offline-dismiss">Continue offline</button>
+            <button data-action="offline-dismiss">Continue</button>
           </div>
         </section>
       </div>
@@ -959,7 +976,12 @@ const consumeResponse = async (response, assistant, controller) => {
   }
 };
 
-const requestResponse = async (prompt, controller, analysis = understandRequest(prompt)) => {
+const requestResponse = async (
+  prompt,
+  controller,
+  analysis = understandRequest(prompt),
+  route = {},
+) => {
   if (controller.signal.aborted) {
     throw new DOMException("Generation stopped", "AbortError");
   }
@@ -971,7 +993,7 @@ const requestResponse = async (prompt, controller, analysis = understandRequest(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      messages: getChatHistory(prompt, analysis),
+      messages: getChatHistory(prompt, analysis, route),
       model: "openai",
     }),
     signal: controller.signal,
@@ -988,6 +1010,8 @@ const requestResponse = async (prompt, controller, analysis = understandRequest(
 
 const streamAnswer = async (prompt, assistant, controller, generation) => {
   const analysis = understandRequest(prompt);
+  let localKnowledgeResponse = "";
+  let route = {};
   try {
     const localResponse = getTierOneResponse(prompt);
     if (localResponse) {
@@ -1004,8 +1028,19 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
       return;
     }
 
-    const localKnowledgeResponse = await getLocalKnowledgeResponse(prompt, analysis, state.mode);
-    if (localKnowledgeResponse) {
+    try {
+      localKnowledgeResponse = await getLocalKnowledgeResponse(prompt, analysis, state.mode);
+    } catch {
+      localKnowledgeResponse = "";
+    }
+
+    route = decideResearchRoute({
+      prompt,
+      localResponse: localKnowledgeResponse,
+      conversation: getChatHistory(prompt, analysis).slice(1, -1),
+    });
+
+    if (route.kind === "local") {
       assistant.content = cleanAssistantOutput(localKnowledgeResponse);
       assistant.streaming = false;
       state.isStreaming = false;
@@ -1020,7 +1055,7 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
     }
 
     await systemPromptReady;
-    const response = await requestResponse(prompt, controller, analysis);
+    const response = await requestResponse(prompt, controller, analysis, route);
     await consumeResponse(response, assistant, controller);
     if (generation !== wipeGeneration) return;
     assistant.streaming = false;
@@ -1041,7 +1076,9 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
       assistant.content = cleanAssistantOutput(assistant.content)
         || "Generation stopped by operator.";
     } else {
-      assistant.content = cleanAssistantOutput(getOfflineResponse(prompt, analysis));
+      assistant.content = cleanAssistantOutput(
+        getResearchFailureResponse(prompt, analysis, route, localKnowledgeResponse),
+      );
     }
     assistant.streaming = false;
     state.isStreaming = false;

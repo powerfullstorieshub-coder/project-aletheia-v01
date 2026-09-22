@@ -28,6 +28,15 @@ export const categories = [
         },
       },
       {
+        id: "general-relativity",
+        aliases: ["general relativity", "einstein relativity", "einsteins theory of relativity"],
+        levels: {
+          basic: "**General relativity** is Einstein’s theory of gravity. It describes gravity as the curvature of spacetime caused by mass and energy, so objects follow paths through curved spacetime rather than being pulled by a force in the Newtonian sense.",
+          intermediate: "General relativity links the geometry of spacetime to matter and energy. It explains why clocks run differently in different gravitational fields, why light bends near massive objects, and why Newtonian gravity remains a useful approximation for weak fields and slow motion.",
+          advanced: "General relativity is a geometric theory in which the metric and its curvature are related to the stress-energy tensor by the Einstein field equations. Its predictions include gravitational time dilation, lensing, black holes, and gravitational waves, while its classical description is expected to require a quantum completion in extreme regimes.",
+        },
+      },
+      {
         id: "quantum-mechanics",
         aliases: ["quantum mechanics", "quantum mechanic", "quantum physics"],
         levels: {

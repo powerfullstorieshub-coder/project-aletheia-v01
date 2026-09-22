@@ -62,7 +62,7 @@ const CATEGORY_LOADERS = [
   },
   {
     ids: ["science", "physics", "astronomy", "biology", "neuroscience"],
-    terms: ["science", "physics", "gravity", "quantum", "astronomy", "planet", "star", "biology", "dna", "cell", "neuron", "synapse"],
+    terms: ["science", "physics", "gravity", "relativity", "quantum", "astronomy", "planet", "star", "biology", "dna", "cell", "neuron", "synapse"],
     load: () => import("./core-science.js"),
   },
   {
