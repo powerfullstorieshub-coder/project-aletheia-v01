@@ -88,9 +88,11 @@ const completeTurns = (messages = []) => {
 export const classifyQuestion = (prompt, messages = []) => {
   const turns = completeTurns(messages);
   const normalizedPrompt = normalizeQuestion(prompt);
-  const exact = [...turns].reverse().find(
-    (turn) => normalizeQuestion(turn.prompt) === normalizedPrompt,
-  );
+  const exactIndex = [...turns]
+    .map((turn, index) => ({ turn, index }))
+    .reverse()
+    .find(({ turn }) => normalizeQuestion(turn.prompt) === normalizedPrompt)?.index ?? -1;
+  const exact = exactIndex >= 0 ? turns[exactIndex] : null;
 
   if (exact) {
     return {
@@ -98,6 +100,7 @@ export const classifyQuestion = (prompt, messages = []) => {
       matchedPrompt: exact.prompt,
       answerMessage: exact.assistantMessage,
       contextMessages: [exact.userMessage, exact.assistantMessage],
+      sameContext: exactIndex === turns.length - 1,
     };
   }
 

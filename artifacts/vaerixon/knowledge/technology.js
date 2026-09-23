@@ -53,14 +53,39 @@ export const categories = [
     topics: [
       {
         id: "prompt-framework",
-        aliases: ["prompt engineering", "prompt", "prompting", "create a prompt", "write a prompt", "instruction for an ai"],
+        aliases: [
+          "prompt engineering",
+          "prompt",
+          "prompting",
+          "create a prompt",
+          "write a prompt",
+          "instruction for an ai",
+          "six pillar prompt framework",
+          "six-pillar prompt framework",
+          "task context example persona format tone",
+        ],
         levels: {
           basic: "A strong prompt states the **TASK**, supplies relevant **CONTEXT**, identifies the desired **FORMAT**, and sets an appropriate **TONE**. Add an **EXAMPLE** or **PERSONA** only when it reduces ambiguity or improves the result.",
           intermediate: "Improve a prompt by specifying the objective, audience, constraints, inputs, success criteria, desired output, and assumptions. Use TASK, CONTEXT, EXAMPLE, PERSONA, FORMAT, and TONE selectively rather than adding headings that do not change the work.",
           advanced: "Prompt design is an iterative specification process: define the objective, expose ambiguity, constrain unacceptable behavior, provide representative examples when needed, choose an output contract, and evaluate results against explicit criteria. Refinement should target observed failure modes rather than adding verbosity.",
         },
-        dynamicAnswer: ({ analysis }) => {
-          if (analysis.taskType !== "prompt-building") return "";
+        dynamicAnswer: ({ analysis, prompt }) => {
+          const asksSixPillars = /\b(?:six[ -]pillar|six pillars|prompt framework|task context example persona format tone)\b/i.test(prompt);
+          if (analysis.taskType !== "prompt-building" && !asksSixPillars) return "";
+          if (asksSixPillars) {
+            return [
+              "The six-pillar prompt framework is a practical checklist:",
+              "",
+              "1. **TASK** — what the model must do.",
+              "2. **CONTEXT** — the facts, background, inputs, and constraints it needs.",
+              "3. **EXAMPLE** — a representative example when the expected result is ambiguous.",
+              "4. **PERSONA** — the relevant expertise or point of view.",
+              "5. **FORMAT** — the required structure, fields, length, or output type.",
+              "6. **TONE** — how the response should sound.",
+              "",
+              "Use only the pillars that improve the result. More instructions are not automatically better.",
+            ].join("\n");
+          }
           return [
             "Here is a copy-ready prompt:",
             "",

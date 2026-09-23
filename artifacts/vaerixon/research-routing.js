@@ -15,6 +15,10 @@ const FRESHNESS_PATTERNS = [
     reason: "The request names a time-sensitive fact or status.",
   },
   {
+    pattern: /\b(?:app|software|service|website|platform)\s+(?:is\s+)?(?:down|broken|unavailable|not working|having issues)\b|\b(?:current|recent|latest)\s+(?:bug|issue|error|compatibility|outage)\b/i,
+    reason: "The request asks about a current software or service issue.",
+  },
+  {
     pattern: /\b(?:weather|temperature|forecast|air quality|aqi|pollution|breaking news|current events?|recent events?|sports scores?|match results?|game schedule|product prices?|service status|outage|software update|app update|release notes?)\b/i,
     reason: "The topic depends on live or recently changed information.",
   },

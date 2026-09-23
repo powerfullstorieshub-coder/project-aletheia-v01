@@ -1,1 +1,2 @@
-- [Imported preview workflows](imported-preview-workflows.md) — use a dedicated supported-port webview when imported artifact metadata is not registered locally.
+- [Knowledge routing](knowledge-routing.md) — shape stable local answers by intent; use external generation for freshness or unsupported multi-topic work.
+- [GitHub publishing](github-publishing.md) — when the local remote is only the Replit backup, publish verified trees through the connected GitHub API after comparing refs.

@@ -25,11 +25,23 @@ const conversation = [
 test("exact questions reuse the previous completed answer", () => {
   const classification = classifyQuestion("What is quantum mechanics?", conversation);
   assert.equal(classification.kind, "exact");
+  assert.equal(classification.sameContext, true);
   assert.equal(classification.answerMessage.id, "a1");
   assert.deepEqual(
     selectRelevantContext("What is quantum mechanics?", conversation).map(({ id }) => id),
     ["u1", "a1"],
   );
+});
+
+test("an exact question after another completed turn does not count as same-context reuse", () => {
+  const messages = [
+    ...conversation,
+    message("u2", "user", "What is dark matter?"),
+    message("a2", "assistant", "Dark matter is inferred from its gravitational effects."),
+  ];
+  const classification = classifyQuestion("What is quantum mechanics?", messages);
+  assert.equal(classification.kind, "exact");
+  assert.equal(classification.sameContext, false);
 });
 
 test("related follow-ups retain the relevant turn without treating it as exact", () => {

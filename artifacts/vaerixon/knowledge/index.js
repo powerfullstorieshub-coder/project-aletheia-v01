@@ -112,6 +112,37 @@ const selectDepth = (analysis = {}, mode = "reality") => {
   return "intermediate";
 };
 
+const LOCAL_TASKS_WITHOUT_SINGLE_TOPIC_SUPPORT = new Set([
+  "comparison",
+  "decision",
+  "critical-thinking",
+  "problem-solving",
+  "creation",
+]);
+
+const shapeLocalResponse = (response, analysis = {}) => {
+  const text = String(response || "").trim();
+  if (!text) return "";
+
+  if (analysis.taskType === "summary") {
+    const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+    return sentences.slice(0, analysis.responseLength === "detailed" ? 3 : 2).join(" ").trim();
+  }
+
+  if (analysis.taskType === "tutorial") {
+    const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+    if (sentences.length > 1) {
+      return [
+        "### Practical path",
+        "",
+        ...sentences.map((sentence, index) => `${index + 1}. ${sentence.trim()}`),
+      ].join("\n");
+    }
+  }
+
+  return text;
+};
+
 const loaderOrder = (normalizedPrompt) => {
   const ranked = CATEGORY_LOADERS.map((loader, index) => ({
     loader,
@@ -151,10 +182,17 @@ export const getLocalKnowledgeResponse = async (prompt, analysis = {}, mode = "r
       const dynamicAnswer = match.topic.dynamicAnswer({ analysis, depth, mode, prompt });
       if (dynamicAnswer) return dynamicAnswer;
     }
+    if (LOCAL_TASKS_WITHOUT_SINGLE_TOPIC_SUPPORT.has(analysis.taskType)) continue;
     return match.topic.levels[depth]
       || match.topic.levels.intermediate
       || match.topic.levels.basic
-      || "";
+      ? shapeLocalResponse(
+        match.topic.levels[depth]
+          || match.topic.levels.intermediate
+          || match.topic.levels.basic,
+        analysis,
+      )
+      : "";
   }
 
   return "";

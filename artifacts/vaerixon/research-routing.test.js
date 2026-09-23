@@ -34,6 +34,16 @@ test("current product or service status is freshness-sensitive", () => {
   assert.equal(route.requiresFreshResearch, true);
 });
 
+test("software outages and app issues are freshness-sensitive", () => {
+  for (const prompt of [
+    "Why is the app not working?",
+    "Is the software currently down?",
+    "What is the latest compatibility issue?",
+  ]) {
+    assert.equal(detectFreshness(prompt).requiresFreshResearch, true, prompt);
+  }
+});
+
 test("an uncovered stable request can use the existing research extension", () => {
   const route = decideResearchRoute({ prompt: "Explain a niche topic" });
   assert.equal(route.kind, "research");
