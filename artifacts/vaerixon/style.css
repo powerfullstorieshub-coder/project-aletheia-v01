@@ -616,6 +616,8 @@ html[data-mode="matrix"] #matrixCanvas {
 
 .mode-matrix .message {
   position: relative;
+  display: block;
+  width: min(100%, 980px);
   max-width: min(100%, 980px);
   margin: 0 auto 16px;
   padding: clamp(16px, 2vw, 22px) clamp(16px, 2.5vw, 28px);
@@ -633,15 +635,27 @@ html[data-mode="matrix"] #matrixCanvas {
     transform 160ms ease;
 }
 
+.mode-matrix .message-label {
+  display: block;
+  padding-top: 0;
+  margin-bottom: 9px;
+  color: #ffffff;
+  font: 500 9px/1.2 var(--font-mono);
+  letter-spacing: 0.15em;
+}
+
 .mode-matrix .message[data-role="assistant"] {
+  margin-left: 0;
   margin-right: auto;
   border-color: rgba(0, 255, 102, 0.42);
   background: rgba(0, 20, 12, 0.48);
 }
 
 .mode-matrix .message[data-role="user"] {
+  width: min(88%, 820px);
   max-width: min(88%, 820px);
   margin-left: auto;
+  margin-right: 0;
   border-color: rgba(255, 255, 255, 0.48);
   border-radius: 17px 5px 17px 5px;
   background: rgba(0, 0, 0, 0.58);
@@ -665,6 +679,22 @@ html[data-mode="matrix"] #matrixCanvas {
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: normal;
+  color: #ffffff;
+  line-height: 1.7;
+}
+
+.mode-matrix .message-content p {
+  margin-bottom: 10px;
+}
+
+.mode-matrix .message-content h3 {
+  margin-top: 16px;
+  margin-bottom: 7px;
+}
+
+.mode-matrix .message-content ul {
+  margin-top: 7px;
+  margin-bottom: 11px;
 }
 
 .mode-matrix .message-content code:not(pre code) {
