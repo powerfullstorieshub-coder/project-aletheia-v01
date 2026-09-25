@@ -615,7 +615,56 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .mode-matrix .message {
-  border-color: rgba(255, 255, 255, 0.3);
+  position: relative;
+  max-width: min(100%, 980px);
+  margin: 0 auto 16px;
+  padding: clamp(16px, 2vw, 22px) clamp(16px, 2.5vw, 28px);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 5px 17px 5px 17px;
+  background: rgba(0, 0, 0, 0.46);
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.mode-matrix .message[data-role="assistant"] {
+  margin-right: auto;
+  border-color: rgba(0, 255, 102, 0.42);
+  background: rgba(0, 20, 12, 0.48);
+}
+
+.mode-matrix .message[data-role="user"] {
+  max-width: min(88%, 820px);
+  margin-left: auto;
+  border-color: rgba(255, 255, 255, 0.48);
+  border-radius: 17px 5px 17px 5px;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.mode-matrix .message[data-role="user"]:hover,
+.mode-matrix .message[data-role="assistant"]:hover {
+  transform: translateY(-1px);
+}
+
+.mode-matrix .message[data-role="user"]:hover {
+  border-color: rgba(255, 255, 255, 0.68);
+}
+
+.mode-matrix .message[data-role="assistant"]:hover {
+  border-color: rgba(0, 255, 102, 0.62);
+}
+
+.mode-matrix .message-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .mode-matrix .message-content code:not(pre code) {
