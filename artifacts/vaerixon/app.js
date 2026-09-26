@@ -130,7 +130,7 @@ const ACTIVITY_STATUSES = Object.freeze({
   analyzing: "Analyzing",
   reasoning: "Reasoning",
   processing: "Processing",
-  thinking: "Thinking",
+  checking: "Checking",
 });
 
 let activityRevealTimer = null;
@@ -138,7 +138,7 @@ let activityRevealTimer = null;
 const renderActivityStatus = (label, extraClass = "") => {
   const safeLabel = Object.values(ACTIVITY_STATUSES).includes(label)
     ? label
-    : ACTIVITY_STATUSES.thinking;
+    : ACTIVITY_STATUSES.processing;
   return `
     <span class="activity-status ${extraClass}" role="status" aria-label="${safeLabel}">
       <span class="activity-label">${safeLabel}</span>
@@ -190,7 +190,7 @@ const setActivityStatus = (status, { defer = false } = {}) => {
 const activityForPhase = (phase, analysis = {}) => {
   if (analysis.taskType === "math") return ACTIVITY_STATUSES.calculating;
   if (phase === "analysis") return ACTIVITY_STATUSES.analyzing;
-  if (phase === "local") return ACTIVITY_STATUSES.thinking;
+  if (phase === "local") return ACTIVITY_STATUSES.checking;
   if (analysis.complexity === "complex") return ACTIVITY_STATUSES.reasoning;
   return ACTIVITY_STATUSES.processing;
 };
