@@ -271,10 +271,12 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .messages {
+  min-width: 0;
+  min-height: 0;
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 28px 0 18px;
+  padding: 28px clamp(10px, 2vw, 24px) 18px;
   scroll-behavior: auto;
 }
 
@@ -694,10 +696,12 @@ html[data-mode="matrix"] #matrixCanvas {
   position: relative;
   z-index: 1;
   display: block;
+  box-sizing: border-box;
   width: fit-content;
   max-width: 100%;
+  min-width: 0;
   min-height: 0;
-  margin: 0 auto 16px;
+  margin: 0 auto 18px;
   padding: clamp(16px, 2vw, 22px) clamp(16px, 2.5vw, 28px);
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 5px 17px 5px 17px;
@@ -726,7 +730,7 @@ html[data-mode="matrix"] #matrixCanvas {
 
 .mode-matrix .message[data-role="assistant"] {
   width: fit-content;
-  max-width: 100%;
+  max-width: min(100%, 820px);
   margin-left: 0;
   margin-right: auto;
   border-color: rgba(0, 255, 102, 0.42);
@@ -767,6 +771,22 @@ html[data-mode="matrix"] #matrixCanvas {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
+.mode-matrix .message-label,
+.mode-matrix .message-content,
+.mode-matrix .message-meta {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.mode-matrix .message-label {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.mode-matrix .message-meta {
+  flex-wrap: wrap;
+}
+
 .mode-matrix .message-content p {
   margin-bottom: 10px;
 }
@@ -788,6 +808,10 @@ html[data-mode="matrix"] #matrixCanvas {
 
 .mode-matrix .message-content pre {
   max-width: 100%;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
   border-color: #00ff66;
   background: #000000;
   color: #ffffff;
