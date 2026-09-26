@@ -705,7 +705,7 @@ html[data-mode="matrix"] #matrixCanvas {
   padding: clamp(16px, 2vw, 22px) clamp(16px, 2.5vw, 28px);
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 5px 17px 5px 17px;
-  background: rgba(0, 0, 0, 0.54);
+  background: rgba(0, 0, 0, 0.53);
   box-shadow:
     0 12px 34px rgba(0, 0, 0, 0.2),
     inset 0 0 0 1px rgba(255, 255, 255, 0.025);
@@ -734,7 +734,7 @@ html[data-mode="matrix"] #matrixCanvas {
   margin-left: 0;
   margin-right: auto;
   border-color: rgba(0, 255, 102, 0.42);
-  background: rgba(0, 20, 12, 0.56);
+  background: rgba(0, 20, 12, 0.55);
 }
 
 .mode-matrix .message[data-role="user"] {
@@ -744,7 +744,7 @@ html[data-mode="matrix"] #matrixCanvas {
   margin-right: 0;
   border-color: rgba(255, 255, 255, 0.48);
   border-radius: 17px 5px 17px 5px;
-  background: rgba(0, 0, 0, 0.64);
+  background: rgba(0, 0, 0, 0.63);
 }
 
 .mode-matrix .message[data-role="user"]:hover,
