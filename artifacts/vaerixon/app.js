@@ -36,6 +36,8 @@ const freshState = () => {
     showOfflineModal: false,
     controller: null,
     streamingMessageId: null,
+    activityStatus: "",
+    activityVisible: false,
   };
 };
 
@@ -121,6 +123,77 @@ const systemPromptReady = fetch("./system-prompt.txt", { cache: "no-store" })
   .catch(() => {
     systemPrompt = "";
   });
+
+const ACTIVITY_STATUSES = Object.freeze({
+  calculating: "Calculating",
+  searching: "Searching",
+  analyzing: "Analyzing",
+  reasoning: "Reasoning",
+  processing: "Processing",
+  thinking: "Thinking",
+});
+
+let activityRevealTimer = null;
+
+const renderActivityStatus = (label, extraClass = "") => {
+  const safeLabel = Object.values(ACTIVITY_STATUSES).includes(label)
+    ? label
+    : ACTIVITY_STATUSES.thinking;
+  return `
+    <span class="activity-status ${extraClass}" role="status" aria-label="${safeLabel}">
+      <span class="activity-label">${safeLabel}</span>
+      <span class="activity-dots" aria-hidden="true">
+        <span class="activity-dot">.</span>
+        <span class="activity-dot">.</span>
+        <span class="activity-dot">.</span>
+      </span>
+    </span>
+  `;
+};
+
+const clearActivityRevealTimer = () => {
+  if (activityRevealTimer) {
+    window.clearTimeout(activityRevealTimer);
+    activityRevealTimer = null;
+  }
+};
+
+const clearActivityStatus = ({ rerender = true } = {}) => {
+  clearActivityRevealTimer();
+  const hadActivity = state.activityStatus || state.activityVisible;
+  state.activityStatus = "";
+  state.activityVisible = false;
+  if (rerender && hadActivity) render();
+};
+
+const setActivityStatus = (status, { defer = false } = {}) => {
+  clearActivityRevealTimer();
+  const nextStatus = status || "";
+  const wasVisible = state.activityVisible;
+  state.activityStatus = nextStatus;
+  state.activityVisible = Boolean(nextStatus && (!defer || wasVisible));
+
+  if (nextStatus && defer && !wasVisible) {
+    activityRevealTimer = window.setTimeout(() => {
+      activityRevealTimer = null;
+      if (state.isStreaming && state.activityStatus === nextStatus) {
+        state.activityVisible = true;
+        render();
+      }
+    }, 220);
+    return;
+  }
+
+  if (nextStatus || wasVisible) render();
+};
+
+const activityForPhase = (phase, analysis = {}) => {
+  if (analysis.taskType === "math") return ACTIVITY_STATUSES.calculating;
+  if (phase === "analysis") return ACTIVITY_STATUSES.analyzing;
+  if (phase === "local") return ACTIVITY_STATUSES.thinking;
+  if (analysis.complexity === "complex") return ACTIVITY_STATUSES.reasoning;
+  return ACTIVITY_STATUSES.processing;
+};
 
 const understandRequest = (prompt) => {
   return analyzeRequest(prompt, {
@@ -411,7 +484,7 @@ const markdown = (value = "") => {
   if (code) flushCode();
   flushParagraph();
   flushList();
-  return blocks.join("") || '<p class="muted-copy">No signal returned.</p>';
+  return blocks.join("");
 };
 
 const formatTime = (timestamp) => new Intl.DateTimeFormat(undefined, {
@@ -425,17 +498,18 @@ const renderMessage = (message) => {
   const content = assistant
     ? markdown(messageContent)
     : `<p>${inlineMarkdown(messageContent).replace(/\n/g, "<br>")}</p>`;
-  const typing = message.streaming && !messageContent
-    ? '<span class="typing" aria-label="Generating">STREAMING</span>'
+  const activity = message.streaming
+    && message.id === state.streamingMessageId
+    && state.activityVisible
+    ? renderActivityStatus(state.activityStatus)
     : "";
-  const streamLabel = message.streaming ? " · LIVE" : "";
 
   return `
     <article class="message" data-role="${assistant ? "assistant" : "user"}" data-message-id="${message.id}">
       <div class="message-label">${assistant ? "VÆRIXON" : "YOU"}</div>
       <div class="message-content">
-        ${content}${typing}
-        <div class="message-meta">${formatTime(message.createdAt)}${streamLabel}</div>
+        ${content}${activity}
+        <div class="message-meta">${formatTime(message.createdAt)}</div>
       </div>
     </article>
   `;
@@ -451,7 +525,7 @@ const renderMessages = (shouldScroll = true) => {
         <div class="empty-inner">
           <div class="signal" aria-hidden="true">+</div>
           <h2>Ask the instrument.</h2>
-          <p>VÆRIXON turns an empty prompt into a precise, streaming answer. No persona. No performance. Just signal.</p>
+          <p>VÆRIXON turns an empty prompt into a precise answer. No persona. No performance. Just signal.</p>
           <div class="suggestions">
             <button class="suggestion" data-action="suggestion" data-prompt="Build a practical decision framework">Decision framework</button>
             <button class="suggestion" data-action="suggestion" data-prompt="Explain the second law of thermodynamics">Explain a hard idea</button>
@@ -645,7 +719,7 @@ const consoleMarkup = () => `
         <button class="mode-button" aria-pressed="${state.mode === "matrix"}" data-action="mode" data-mode="matrix">[ MATRIX MODE ]</button>
       </div>
       <div class="top-actions">
-        <div class="system-state" aria-live="polite"><span class="state-dot"></span><span>${state.isStreaming ? "streaming" : "system ready"}</span></div>
+        <div class="system-state" aria-live="polite"><span class="state-dot"></span>${state.activityVisible ? renderActivityStatus(state.activityStatus, "activity-status--topbar") : '<span data-system-status>system ready</span>'}</div>
         <button class="settings-button" data-action="settings-open" aria-label="Open Settings">SETTINGS</button>
       </div>
     </header>
@@ -861,19 +935,20 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
   const analysis = understandRequest(prompt);
   let localKnowledgeResponse = "";
   let route = {};
+  setActivityStatus(activityForPhase("analysis", analysis), { defer: true });
   try {
     const localResponse = getTierOneResponse(prompt);
     if (localResponse) {
+      setActivityStatus(activityForPhase("local", analysis));
       assistant.content = cleanAssistantOutput(localResponse);
       assistant.streaming = false;
       state.isStreaming = false;
       state.controller = null;
       state.streamingMessageId = null;
       state.error = "";
+      clearActivityStatus({ rerender: false });
       save();
-      renderMessages(true);
-      updateStatus();
-      refreshTransportButton();
+      render();
       return;
     }
 
@@ -890,19 +965,20 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
     });
 
     if (route.kind === "local") {
+      setActivityStatus(activityForPhase("local", analysis));
       assistant.content = cleanAssistantOutput(localKnowledgeResponse);
       assistant.streaming = false;
       state.isStreaming = false;
       state.controller = null;
       state.streamingMessageId = null;
       state.error = "";
+      clearActivityStatus({ rerender: false });
       save();
-      renderMessages(true);
-      updateStatus();
-      refreshTransportButton();
+      render();
       return;
     }
 
+    setActivityStatus(activityForPhase("external", analysis));
     await systemPromptReady;
     const response = await requestResponse(prompt, controller, analysis, route);
     await consumeResponse(response, assistant, controller);
@@ -913,11 +989,10 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
     state.streamingMessageId = null;
     state.error = "";
     assistant.content = cleanAssistantOutput(assistant.content)
-      || "No signal returned. Try transmitting again.";
+      || "I couldn't complete that response. Please try again.";
+    clearActivityStatus({ rerender: false });
     save();
-    renderMessages(true);
-    updateStatus();
-    refreshTransportButton();
+    render();
   } catch (error) {
     if (generation !== wipeGeneration) return;
     const stopped = error?.name === "AbortError" || controller.signal.aborted;
@@ -937,23 +1012,10 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
       ? "Generation stopped. The partial response remains in the console."
       : "";
     state.showOfflineModal = !stopped;
+    clearActivityStatus({ rerender: false });
     save();
     render();
   }
-};
-
-const updateStatus = () => {
-  const status = document.querySelector(".system-state span:last-child");
-  if (status) status.textContent = state.isStreaming ? "streaming" : "system ready";
-};
-
-const refreshTransportButton = () => {
-  const current = document.querySelector(".send-button");
-  if (!current || state.isStreaming) return;
-  current.classList.remove("stop");
-  current.type = "submit";
-  current.dataset.action = "send";
-  current.textContent = "Transmit";
 };
 
 const stopStreaming = () => {
@@ -966,6 +1028,7 @@ const stopStreaming = () => {
   state.controller = null;
   state.streamingMessageId = null;
   state.error = "Generation stopped. The partial response remains in the console.";
+  clearActivityStatus({ rerender: false });
   save();
   render();
 };
@@ -1017,12 +1080,14 @@ const sendPrompt = async (value) => {
       state.controller = null;
       state.streamingMessageId = null;
       state.isStreaming = false;
+      clearActivityStatus({ rerender: false });
     }
   }
 };
 
 const deleteAll = () => {
   wipeGeneration += 1;
+  clearActivityRevealTimer();
   activeControllers.forEach((controller) => controller.abort());
   activeControllers.clear();
   if (state.controller) state.controller.abort();

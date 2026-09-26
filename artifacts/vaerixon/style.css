@@ -273,6 +273,7 @@ html[data-mode="matrix"] #matrixCanvas {
 .messages {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 28px 0 18px;
   scroll-behavior: auto;
 }
@@ -449,12 +450,87 @@ html[data-mode="matrix"] #matrixCanvas {
   letter-spacing: 0.04em;
 }
 
-.typing {
-  display: inline-block;
-  padding-top: 7px;
+.activity-status {
+  display: inline-flex;
+  min-height: 1.2em;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 7px;
   color: var(--accent);
   font: 10px var(--font-mono);
   letter-spacing: 0.08em;
+}
+
+.activity-status--topbar {
+  min-width: 10ch;
+  margin-top: 0;
+  color: inherit;
+}
+
+.activity-label {
+  display: inline-block;
+  min-width: 10ch;
+}
+
+.activity-dots {
+  display: inline-grid;
+  width: 1.05em;
+  grid-template-columns: repeat(3, 0.35em);
+}
+
+.activity-dot {
+  opacity: 0;
+}
+
+.activity-dot:nth-child(1) {
+  opacity: 1;
+}
+
+.activity-dot:nth-child(2) {
+  animation: activity-dot-two 1.35s steps(1, end) infinite;
+}
+
+.activity-dot:nth-child(3) {
+  animation: activity-dot-three 1.35s steps(1, end) infinite;
+}
+
+@keyframes activity-dot-two {
+  0%,
+  32% {
+    opacity: 0;
+  }
+
+  33%,
+  99% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes activity-dot-three {
+  0%,
+  65% {
+    opacity: 0;
+  }
+
+  66%,
+  99% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-dot {
+    opacity: 1 !important;
+    animation: none !important;
+  }
 }
 
 .error-banner {
@@ -610,7 +686,7 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .mode-matrix .message[data-role="assistant"] .message-label,
-.mode-matrix .typing {
+.mode-matrix .activity-status {
   color: #00ff66;
 }
 
@@ -618,8 +694,9 @@ html[data-mode="matrix"] #matrixCanvas {
   position: relative;
   z-index: 1;
   display: block;
-  width: min(100%, 980px);
-  max-width: min(100%, 980px);
+  width: fit-content;
+  max-width: 100%;
+  min-height: 0;
   margin: 0 auto 16px;
   padding: clamp(16px, 2vw, 22px) clamp(16px, 2.5vw, 28px);
   border: 1px solid rgba(255, 255, 255, 0.28);
@@ -648,6 +725,8 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .mode-matrix .message[data-role="assistant"] {
+  width: fit-content;
+  max-width: 100%;
   margin-left: 0;
   margin-right: auto;
   border-color: rgba(0, 255, 102, 0.42);
@@ -655,7 +734,7 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .mode-matrix .message[data-role="user"] {
-  width: min(88%, 820px);
+  width: fit-content;
   max-width: min(88%, 820px);
   margin-left: auto;
   margin-right: 0;
@@ -679,6 +758,7 @@ html[data-mode="matrix"] #matrixCanvas {
 
 .mode-matrix .message-content {
   min-width: 0;
+  max-width: 100%;
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: normal;
@@ -707,6 +787,7 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .mode-matrix .message-content pre {
+  max-width: 100%;
   border-color: #00ff66;
   background: #000000;
   color: #ffffff;
@@ -805,7 +886,7 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .mode-reality .message[data-role="assistant"] .message-label,
-.mode-reality .typing {
+.mode-reality .activity-status {
   color: #ff705a;
 }
 
