@@ -670,6 +670,16 @@ const matrixCanvas = () => {
   frame = requestAnimationFrame(draw);
 };
 
+const syncMatrixRain = ({ reset = false } = {}) => {
+  if (state.mode !== "matrix") {
+    if (matrixRainRunning) stopMatrixRain();
+    return;
+  }
+
+  if (reset && matrixRainRunning) stopMatrixRain();
+  if (!matrixRainRunning) matrixCanvas();
+};
+
 const settingsMarkup = () => {
   if (!state.showSettings) return "";
 
@@ -792,7 +802,7 @@ const updateComposer = () => {
   if (sendButton) sendButton.hidden = !textarea.value.trim();
 };
 
-const render = () => {
+const render = ({ resetMatrixRain = false } = {}) => {
   setDocumentMode();
   if (state.zeroed) {
     root.innerHTML = zeroedMarkup();
@@ -804,11 +814,7 @@ const render = () => {
   root.innerHTML = consoleMarkup();
   renderMessages(false);
   bindEvents();
-  if (state.mode === "matrix") {
-    if (!matrixRainRunning) matrixCanvas();
-  } else if (matrixRainRunning) {
-    stopMatrixRain();
-  }
+  syncMatrixRain({ reset: resetMatrixRain });
   const messages = document.querySelector("[data-messages]");
   if (messages && state.messages.length) messages.scrollTop = messages.scrollHeight;
 };
@@ -1121,7 +1127,7 @@ const bindEvents = () => {
         state.draft = "";
         state.error = "";
         save();
-        render();
+        render({ resetMatrixRain: true });
         return;
       }
       if (action === "settings-open") {
