@@ -8,7 +8,7 @@
   --accent: #ff705a;
   --success: #4ed39c;
   --danger: #b93636;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", "Noto Sans Devanagari", "Nirmala UI", "Mangal", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Rajdhani", "Inter", ui-sans-serif, sans-serif;
   --font-mono: "DM Mono", ui-monospace, SFMono-Regular, monospace;
 }
@@ -349,6 +349,8 @@ html[data-mode="matrix"] #matrixCanvas {
 
 .message-content {
   min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   font-size: 14px;
   line-height: 1.75;
 }
@@ -527,6 +529,7 @@ html[data-mode="matrix"] #matrixCanvas {
   max-height: 180px;
   overflow-y: auto;
   resize: none;
+  overflow-wrap: anywhere;
   padding: 15px 58px 14px 18px;
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 18px;

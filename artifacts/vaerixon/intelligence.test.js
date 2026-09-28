@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   analyzeRequest,
+  detectResponseLanguage,
   getIntelligenceInstruction,
 } from "./intelligence.js";
 
@@ -55,4 +56,25 @@ test("the instruction preserves agnostic religion handling and prompt pillars", 
   );
   assert.match(promptInstruction, /TASK, CONTEXT, EXAMPLE, PERSONA, FORMAT, TONE/);
   assert.match(promptInstruction, /descriptively and agnostically/i);
+});
+
+test("detects English, Hindi, Hinglish, and mixed-language input", () => {
+  assert.equal(detectResponseLanguage("Explain photosynthesis simply."), "english");
+  assert.equal(detectResponseLanguage("प्रकाश संश्लेषण को आसान भाषा में समझाओ।"), "hindi");
+  assert.equal(detectResponseLanguage("Photosynthesis ko simple Hinglish mein explain karo."), "hinglish");
+  assert.equal(
+    detectResponseLanguage("Is concept ko Hindi mein explain karo but technical terms English mein rakho."),
+    "hinglish",
+  );
+});
+
+test("language handling is included in both mode instructions", () => {
+  for (const mode of ["reality", "matrix"]) {
+    const instruction = getIntelligenceInstruction(
+      analyzeRequest("JavaScript function kaise work karta hai?", { mode }),
+      mode,
+    );
+    assert.match(instruction, /natural Hinglish/i);
+    assert.match(instruction, /technical terms/i);
+  }
 });

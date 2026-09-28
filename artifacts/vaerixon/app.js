@@ -204,21 +204,46 @@ const understandRequest = (prompt) => {
 
 const getTierOneResponse = (prompt) => {
   const normalized = normalizePrompt(prompt);
+  const language = understandRequest(prompt).language;
+  const languageResponses = {
+    english: {
+      greeting: "Hello! VÆRIXON here. How can I assist you today?",
+      identity: "I’m VÆRIXON. I help turn questions, ideas, and difficult problems into clear, useful answers.",
+      about: "VÆRIXON is a focused thinking partner for explanations, decisions, research, and first drafts.",
+      help: "I can explain difficult ideas, work through mathematics step by step, compare options, and help you shape a strong first draft. What would you like to make clear?",
+      status: "Everything is ready. Ask a question whenever you’re ready.",
+    },
+    hindi: {
+      greeting: "नमस्ते! मैं VÆRIXON हूँ। मैं आपकी कैसे सहायता कर सकता हूँ?",
+      identity: "मैं VÆRIXON हूँ। मैं सवालों, विचारों और कठिन समस्याओं को स्पष्ट और उपयोगी उत्तरों में बदलने में मदद करता हूँ।",
+      about: "VÆRIXON explanations, decisions, research और first drafts के लिए एक focused thinking partner है।",
+      help: "मैं कठिन ideas समझा सकता हूँ, mathematics को step by step हल कर सकता हूँ और options की तुलना कर सकता हूँ। आप क्या स्पष्ट करना चाहते हैं?",
+      status: "सब तैयार है। जब चाहें अपना सवाल पूछें।",
+    },
+    hinglish: {
+      greeting: "Hello! Main VÆRIXON hoon. Main aapki kaise help kar sakta hoon?",
+      identity: "Main VÆRIXON hoon. Main questions, ideas aur difficult problems ko clear, useful answers mein badalne mein help karta hoon.",
+      about: "VÆRIXON explanations, decisions, research aur first drafts ke liye ek focused thinking partner hai.",
+      help: "Main difficult ideas explain kar sakta hoon, mathematics step by step solve kar sakta hoon aur options compare kar sakta hoon. Aap kya clear karna chahte hain?",
+      status: "Sab ready hai. Jab aap ready hon, apna question poochhiye.",
+    },
+  };
+  const responses = languageResponses[language] || languageResponses.english;
 
-  if (/^(hi|hello|hey)( there)?$/.test(normalized)) {
-    return "Hello! VÆRIXON here. How can I assist you today?";
+  if (/^(hi|hello|hey|namaste|नमस्ते|हैलो|हाय)( there)?$/u.test(normalized)) {
+    return responses.greeting;
   }
-  if (normalized === "who are you") {
-    return "I’m VÆRIXON. I help turn questions, ideas, and difficult problems into clear, useful answers.";
+  if (normalized === "who are you" || /^(aap|ap) kaun ho$/.test(normalized)) {
+    return responses.identity;
   }
   if (normalized === "what is vaerixon") {
-    return "VÆRIXON is a focused thinking partner for explanations, decisions, research, and first drafts.";
+    return responses.about;
   }
   if (normalized === "help") {
-    return "I can explain difficult ideas, work through mathematics step by step, compare options, and help you shape a strong first draft. What would you like to make clear?";
+    return responses.help;
   }
   if (normalized === "status") {
-    return "Everything is ready. Ask a question whenever you’re ready.";
+    return responses.status;
   }
 
   return "";
@@ -317,14 +342,37 @@ const evaluateArithmetic = (expression) => {
   }
 };
 
-const getOfflineMathResponse = (prompt) => {
+const getOfflineMathResponse = (prompt, analysis = {}) => {
   const expression = arithmeticExpressionFromPrompt(prompt);
   if (!expression) return "";
   const result = evaluateArithmetic(expression);
   if (result === null) return "";
+  const language = analysis.language || "english";
 
   const compact = expression.replace(/\s+/g, "");
   if (compact === "100-12*2+1") {
+    if (language === "hindi") {
+      return [
+        "**100 - 12 × 2 + 1** को order of operations के अनुसार हल करते हैं।",
+        "",
+        "1. पहले multiplication: **12 × 2 = 24**।",
+        "2. अब expression: **100 - 24 + 1**।",
+        "3. बाएँ से दाएँ हल करें: **100 - 24 = 76**, फिर **76 + 1 = 77**।",
+        "",
+        "**अंतिम उत्तर: 77**",
+      ].join("\n");
+    }
+    if (language === "hinglish") {
+      return [
+        "**100 - 12 × 2 + 1** ko order of operations ke according solve karte hain.",
+        "",
+        "1. Pehle multiplication: **12 × 2 = 24**.",
+        "2. Expression ab **100 - 24 + 1** hai.",
+        "3. Left se right solve karein: **100 - 24 = 76**, phir **76 + 1 = 77**.",
+        "",
+        "**Final answer: 77**",
+      ].join("\n");
+    }
     return [
       "Let’s solve **100 - 12 × 2 + 1** using the order of operations.",
       "",
@@ -336,6 +384,24 @@ const getOfflineMathResponse = (prompt) => {
     ].join("\n");
   }
 
+  if (language === "hindi") {
+    return [
+      `**${expression}** को step by step हल करते हैं।`,
+      "",
+      "1. Addition या subtraction से पहले multiplication, division और exponents लागू करें।",
+      "2. बाकी operations को बाएँ से दाएँ हल करें।",
+      `3. परिणाम **${result}** है।`,
+    ].join("\n");
+  }
+  if (language === "hinglish") {
+    return [
+      `**${expression}** ko step by step solve karte hain.`,
+      "",
+      "1. Addition ya subtraction se pehle multiplication, division aur exponents apply karein.",
+      "2. Baaki operations ko left se right evaluate karein.",
+      `3. Result **${result}** hai.`,
+    ].join("\n");
+  }
   return [
     `Let’s solve **${expression}** step by step.`,
     "",
@@ -346,9 +412,23 @@ const getOfflineMathResponse = (prompt) => {
 };
 
 const getOfflineResponse = (prompt, analysis = understandRequest(prompt)) => {
-  const mathResponse = getOfflineMathResponse(prompt);
+  const mathResponse = getOfflineMathResponse(prompt, analysis);
   if (mathResponse) return mathResponse;
 
+  if (analysis.language === "hindi") {
+    return [
+      "External signal उपलब्ध न होने पर भी मैं मदद जारी रख सकता हूँ।",
+      "",
+      "इस exact topic के लिए मेरे पास अभी local reference नहीं है। आप definition, comparison, worked example या step-by-step breakdown माँग सकते हैं।",
+    ].join("\n");
+  }
+  if (analysis.language === "hinglish") {
+    return [
+      "External signal unavailable hone par bhi main help kar sakta hoon.",
+      "",
+      "Is exact topic ke liye mere paas abhi local reference nahi hai. Aap definition, comparison, worked example ya step-by-step breakdown maang sakte hain.",
+    ].join("\n");
+  }
   return [
     "I can continue helping while the external signal is unavailable.",
     "",
@@ -959,16 +1039,24 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
     }
 
     try {
-      localKnowledgeResponse = await getLocalKnowledgeResponse(prompt, analysis, state.mode);
+      if (analysis.language === "english") {
+        localKnowledgeResponse = await getLocalKnowledgeResponse(prompt, analysis, state.mode);
+      }
     } catch {
       localKnowledgeResponse = "";
     }
 
-    route = decideResearchRoute({
-      prompt,
-      localResponse: localKnowledgeResponse,
-      conversation: getChatHistory(prompt, analysis).slice(1, -1),
-    });
+    route = analysis.language === "english"
+      ? decideResearchRoute({
+        prompt,
+        localResponse: localKnowledgeResponse,
+        conversation: getChatHistory(prompt, analysis).slice(1, -1),
+      })
+      : {
+        kind: "research",
+        requiresFreshResearch: false,
+        reason: "The primary text model should answer in the user's detected language.",
+      };
 
     if (route.kind === "local") {
       setActivityStatus(activityForPhase("local", analysis));

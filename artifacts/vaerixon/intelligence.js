@@ -5,6 +5,52 @@ const normalize = (value = "") => String(value)
   .replace(/\s+/g, " ")
   .trim();
 
+const DEVANAGARI_PATTERN = /[\u0900-\u097F]/gu;
+const HINGLISH_HINTS = new Set([
+  "aap",
+  "ap",
+  "batao",
+  "bhi",
+  "chahiye",
+  "hai",
+  "hain",
+  "kaise",
+  "kaun",
+  "karo",
+  "karna",
+  "karta",
+  "karti",
+  "ke",
+  "ki",
+  "ko",
+  "mein",
+  "mujhe",
+  "nahi",
+  "nahin",
+  "rakho",
+  "samjhao",
+  "se",
+  "toh",
+  "ye",
+  "yeh",
+]);
+
+const hasHinglishPhrase = (normalized) => /\b(?:kaise|karo|karna|karta|karti|mein|mujhe|samjhao|rakho)\b/.test(normalized);
+
+export const detectResponseLanguage = (prompt = "") => {
+  const raw = String(prompt || "").trim();
+  if (!raw) return "english";
+
+  const devanagariCharacters = raw.match(DEVANAGARI_PATTERN)?.length || 0;
+  if (devanagariCharacters > 0) return "hindi";
+
+  const normalized = normalize(raw);
+  const tokens = normalized.split(" ").filter(Boolean);
+  const hinglishHintCount = tokens.filter((token) => HINGLISH_HINTS.has(token)).length;
+  if (hinglishHintCount >= 2 || hasHinglishPhrase(normalized)) return "hinglish";
+  return "english";
+};
+
 const REQUEST_TYPE_PATTERNS = {
   creation: /\b(?:create|write|draft|generate|build|design|make|compose|prepare)\b/i,
   question: /^(?:what|why|when|where|who|which|how|is|are|can|does|do|should|could|would)\b/i,
@@ -97,6 +143,7 @@ export const analyzeRequest = (prompt, {
 } = {}) => {
   const raw = String(prompt || "").trim();
   const normalized = normalize(raw);
+  const language = detectResponseLanguage(raw);
   const wordCount = normalized ? normalized.split(" ").length : 0;
   const audience = inferAudience(raw);
   const isPromptRequest = /\b(?:prompt|prompting|prompt engineering|instruction for an ai)\b/i.test(raw)
@@ -199,6 +246,7 @@ export const analyzeRequest = (prompt, {
     responseLength,
     responseShape: shapeForTask[taskType],
     domain: inferDomain(normalized),
+    language,
     followUp,
     followUpIntent,
     contextAvailable,
@@ -215,6 +263,7 @@ export const getIntelligenceInstruction = (analysis = {}, mode = "reality") => {
     responseLength: "medium",
     responseShape: shapeForTask.informational,
     domain: "general",
+    language: "english",
     followUp: false,
     followUpIntent: "",
     contextAvailable: false,
@@ -247,11 +296,18 @@ export const getIntelligenceInstruction = (analysis = {}, mode = "reality") => {
   const modeInstruction = mode === "matrix"
     ? "Matrix Mode may go one level deeper than the minimum useful answer, especially for mechanisms, assumptions, counterarguments, and failure modes. Do not add depth merely to sound impressive."
     : "Reality Mode should give the shortest complete answer that solves the user's actual problem, adding detail only when complexity or risk requires it.";
+  const languageInstruction = {
+    english: "Language handling: respond in English because the user is communicating in English.",
+    hindi: "Language handling: respond in natural Hindi because the user is communicating in Hindi. Keep proper names, product names, model names, programming syntax, URLs, code, and important technical identifiers accurate and in their original form where appropriate.",
+    hinglish: "Language handling: respond in natural Hinglish because the user is communicating in Hinglish. Keep important technical terms, proper names, product names, model names, programming syntax, URLs, code, and technical identifiers in accurate original form. Do not translate the user's question unnecessarily.",
+  }[safeAnalysis.language] || "Language handling: match the language and style used by the user.";
 
   return [
     "Before answering, silently identify the user's intent, task type, complexity, audience, desired length, domain, and constraints.",
     `Internal request understanding: type=${safeAnalysis.requestType}; task=${safeAnalysis.taskType}; complexity=${safeAnalysis.complexity}; audience=${safeAnalysis.audience}; domain=${safeAnalysis.domain}; desired length=${safeAnalysis.responseLength}; follow-up=${safeAnalysis.followUpIntent || "none"}; constraints=${constraints}.`,
     `Response contract: produce ${safeAnalysis.responseShape}.`,
+    languageInstruction,
+    "Detect the user's language from the actual message, including mixed-language input. Do not treat Hindi, Hinglish, or mixed scripts as an error, and do not force English when the user is clearly communicating otherwise.",
     modeInstruction,
     contextInstruction,
     "Use logical, contextual, practical, and critical reasoning as needed. Answer directly first, then show concise reasoning, steps, assumptions, trade-offs, or uncertainty when they improve the result.",
