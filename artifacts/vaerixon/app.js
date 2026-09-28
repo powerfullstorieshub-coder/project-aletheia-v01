@@ -724,25 +724,23 @@ const consoleMarkup = () => `
       </div>
     </header>
     <main class="workspace">
-      <div class="console-head">
-        <div>
-          ${state.mode === "matrix" ? "" : '<div class="eyebrow">Intelligence console // ready</div>'}
-          <h1 class="console-title">${state.mode === "matrix" ? "See the signal." : "Make it precise."}</h1>
-        </div>
-        <p class="console-note">${state.mode === "matrix" ? "A high-contrast interface for pattern, possibility, and raw analysis." : "A focused interface for decisions, explanations, and useful first drafts."}</p>
-      </div>
       <section class="conversation-shell" aria-label="Conversation">
         <div class="messages" data-messages role="log" aria-live="polite"></div>
         <form class="composer" data-composer>
           <div class="composer-wrap">
-            <textarea data-prompt-input rows="1" aria-label="Prompt" placeholder="${state.mode === "matrix" ? "Transmit a thought into the grid..." : "What do you need to make clear?"}">${escapeHTML(state.draft)}</textarea>
-            <div class="composer-hint">RETURN TO SEND · SHIFT+RETURN FOR LINE BREAK</div>
+            <textarea data-prompt-input rows="1" aria-label="Prompt" placeholder="Ask VÆRIXON">${escapeHTML(state.draft)}</textarea>
+            <button
+              class="send-button ${state.isStreaming ? "stop" : ""}"
+              type="${state.isStreaming ? "button" : "submit"}"
+              data-action="${state.isStreaming ? "stop" : "send"}"
+              aria-label="${state.isStreaming ? "Stop generation" : "Send message"}"
+              ${state.isStreaming || state.draft.trim() ? "" : "hidden"}
+            >${state.isStreaming ? "×" : "↑"}</button>
           </div>
-          <button class="send-button ${state.isStreaming ? "stop" : ""}" type="${state.isStreaming ? "button" : "submit"}" data-action="${state.isStreaming ? "stop" : "send"}">${state.isStreaming ? "Stop" : "Transmit"}</button>
         </form>
       </section>
     </main>
-    <footer class="footer"><span>PRIVATE SESSION</span><span>NO ACCOUNT REQUIRED</span></footer>
+    <footer class="footer"><span>NO ACCOUNT REQUIRED</span></footer>
     ${state.error ? `<div class="error-banner" role="alert">${escapeHTML(state.error)}</div>` : ""}
     ${settingsMarkup()}
     ${state.showDeleteModal ? `
@@ -788,8 +786,10 @@ const zeroedMarkup = () => `
 const updateComposer = () => {
   const textarea = document.querySelector("[data-prompt-input]");
   if (!textarea) return;
+  const sendButton = document.querySelector('[data-action="send"]');
   textarea.style.height = "auto";
   textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
+  if (sendButton) sendButton.hidden = !textarea.value.trim();
 };
 
 const render = () => {
@@ -1105,8 +1105,9 @@ const deleteAll = () => {
 const bindEvents = () => {
   document.querySelectorAll("[data-action]").forEach((element) => {
     element.addEventListener("click", (event) => {
-      event.preventDefault();
       const action = element.dataset.action;
+      if (action === "send") return;
+      event.preventDefault();
 
       if (action === "home") {
         if (!state.isStreaming) render();

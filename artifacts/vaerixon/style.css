@@ -220,47 +220,6 @@ html[data-mode="matrix"] #matrixCanvas {
   margin: 0 auto;
 }
 
-.console-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: end;
-  gap: 24px;
-  padding: clamp(35px, 7vh, 78px) 0 24px;
-}
-
-.eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--accent);
-  font: 10px var(--font-mono);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-}
-
-.eyebrow::before {
-  width: 22px;
-  height: 1px;
-  background: currentColor;
-  content: "";
-}
-
-.console-title {
-  margin: 14px 0 0;
-  font: 700 clamp(30px, 5vw, 61px)/0.98 var(--font-display);
-  letter-spacing: -0.07em;
-  text-transform: uppercase;
-}
-
-.console-note {
-  max-width: 255px;
-  margin: 0 0 3px;
-  color: var(--ink-soft);
-  font-size: 12px;
-  line-height: 1.55;
-  text-align: right;
-}
-
 .conversation-shell {
   position: relative;
   display: flex;
@@ -550,15 +509,14 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .composer {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
+  display: flex;
   padding: 16px 0 23px;
   border-top: 1px solid var(--line-strong);
 }
 
 .composer-wrap {
   position: relative;
+  width: 100%;
 }
 
 .composer textarea {
@@ -566,10 +524,11 @@ html[data-mode="matrix"] #matrixCanvas {
   width: 100%;
   min-height: 54px;
   max-height: 180px;
+  overflow-y: auto;
   resize: none;
-  padding: 15px 15px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 2px;
+  padding: 15px 58px 14px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 18px;
   outline: none;
   background: #15161b;
   color: var(--ink);
@@ -578,8 +537,8 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .composer textarea::placeholder {
-  color: var(--ink-soft);
-  opacity: 0.7;
+  color: rgba(255, 255, 255, 0.58);
+  opacity: 1;
 }
 
 .composer textarea:focus {
@@ -587,41 +546,35 @@ html[data-mode="matrix"] #matrixCanvas {
   background: #1b1c22;
 }
 
-.composer-hint {
+.send-button {
   position: absolute;
   right: 10px;
-  bottom: 8px;
-  color: var(--ink-soft);
-  opacity: 0.7;
-  font: 9px var(--font-mono);
+  bottom: 10px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  place-items: center;
+  padding: 0 0 2px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #ffffff;
+  font: 24px/1 var(--font-sans);
+  transition: filter 160ms ease;
 }
 
-.send-button {
-  align-self: stretch;
-  min-width: 112px;
-  border: 1px solid var(--ink);
-  border-radius: 2px;
-  background: var(--ink);
-  color: var(--paper);
-  font: 11px var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.send-button[hidden] {
+  display: none;
 }
 
 .send-button:hover {
-  border-color: var(--accent);
-  background: var(--accent);
+  filter: brightness(1.1);
 }
 
 .send-button.stop {
-  border-color: var(--accent);
-  background: transparent;
-  color: var(--accent);
-}
-
-.send-button.stop:hover {
-  background: var(--accent);
-  color: var(--paper);
+  padding-bottom: 3px;
+  font-size: 22px;
 }
 
 .footer {
@@ -633,9 +586,6 @@ html[data-mode="matrix"] #matrixCanvas {
   color: var(--ink-soft);
   font: 9px var(--font-mono);
   letter-spacing: 0.04em;
-}
-
-.footer span:last-child {
   text-align: right;
 }
 
@@ -664,7 +614,6 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .mode-matrix .mode-switch,
-.mode-matrix .composer textarea,
 .mode-matrix .suggestion {
   background: #000000;
 }
@@ -678,8 +627,6 @@ html[data-mode="matrix"] #matrixCanvas {
   color: #ffffff;
 }
 
-.mode-matrix .console-title,
-.mode-matrix .console-note,
 .mode-matrix .message-content,
 .mode-matrix .message[data-role="user"] .message-label,
 .mode-matrix .message[data-role="user"] .message-meta,
@@ -834,7 +781,7 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .mode-matrix .composer textarea::placeholder {
-  color: #ffffff;
+  color: rgba(255, 255, 255, 0.58);
 }
 
 .mode-matrix .composer textarea:focus {
@@ -842,26 +789,12 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .mode-matrix .send-button {
-  border-color: #00ff66;
   background: #00ff66;
-  color: #000000;
-}
-
-.mode-matrix .send-button:hover {
-  border-color: #ffffff;
-  background: #ffffff;
-}
-
-.mode-matrix .send-button.stop {
-  border-color: #ffffff;
-  background: #000000;
   color: #ffffff;
 }
 
-.mode-matrix .send-button.stop:hover {
-  border-color: #00ff66;
+.mode-matrix .send-button:hover {
   background: #00ff66;
-  color: #000000;
 }
 
 .app.mode-reality {
@@ -900,8 +833,6 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .mode-reality .mode-button:hover,
-.mode-reality .console-title,
-.mode-reality .console-note,
 .mode-reality .message-content,
 .mode-reality .message[data-role="user"] .message-label,
 .mode-reality .message[data-role="user"] .message-meta,
@@ -942,7 +873,7 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .mode-reality .composer textarea::placeholder {
-  color: #FFFFFF;
+  color: rgba(255, 255, 255, 0.58);
 }
 
 .mode-reality .composer textarea:focus {
@@ -950,26 +881,12 @@ html[data-mode="matrix"] #matrixCanvas {
 }
 
 .mode-reality .send-button {
-  border-color: #FFFFFF;
-  background: #FFFFFF;
-  color: #0F0F11;
+  background: #ff705a;
+  color: #ffffff;
 }
 
 .mode-reality .send-button:hover {
-  border-color: #ff705a;
   background: #ff705a;
-  color: #FFFFFF;
-}
-
-.mode-reality .send-button.stop {
-  border-color: #ff705a;
-  background: transparent;
-  color: #ff705a;
-}
-
-.mode-reality .send-button.stop:hover {
-  background: #ff705a;
-  color: #FFFFFF;
 }
 
 .zeroed-screen {
@@ -1235,17 +1152,6 @@ html[data-mode="matrix"] #matrixCanvas {
     font-size: 9px;
   }
 
-  .console-head {
-    display: block;
-    padding-top: 38px;
-  }
-
-  .console-note {
-    max-width: 100%;
-    margin-top: 15px;
-    text-align: left;
-  }
-
   .message {
     grid-template-columns: 67px minmax(0, 1fr);
     gap: 12px;
@@ -1256,19 +1162,11 @@ html[data-mode="matrix"] #matrixCanvas {
   }
 
   .composer {
-    grid-template-columns: 1fr;
-  }
-
-  .send-button {
-    min-height: 46px;
+    padding-bottom: 16px;
   }
 
   .footer {
     padding-bottom: 12px;
-  }
-
-  .footer span:last-child {
-    display: none;
   }
 
   .settings-backdrop {
