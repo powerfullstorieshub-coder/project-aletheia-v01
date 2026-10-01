@@ -602,16 +602,7 @@ const renderMessages = (shouldScroll = true) => {
   if (!state.messages.length) {
     target.innerHTML = `
       <div class="empty-state">
-        <div class="empty-inner">
-          <div class="signal" aria-hidden="true">+</div>
-          <h2>Ask the instrument.</h2>
-          <p>VÆRIXON turns an empty prompt into a precise answer. No persona. No performance. Just signal.</p>
-          <div class="suggestions">
-            <button class="suggestion" data-action="suggestion" data-prompt="Build a practical decision framework">Decision framework</button>
-            <button class="suggestion" data-action="suggestion" data-prompt="Explain the second law of thermodynamics">Explain a hard idea</button>
-            <button class="suggestion" data-action="suggestion" data-prompt="Write a focused project brief">Write a project brief</button>
-          </div>
-        </div>
+        <h2>What’s on your mind?</h2>
       </div>
     `;
   } else {
@@ -802,15 +793,15 @@ const consoleMarkup = () => `
   <div class="app mode-${state.mode}">
     <header class="topbar">
       <div>
-        <a class="brand" href="/" data-action="home">VÆRIXON<span class="brand-subtitle">Wake up to Reality.</span></a>
+        <a class="brand" href="/" data-action="home">VÆRIXON</a>
       </div>
       <div class="mode-switch" role="group" aria-label="Interface mode">
-        <button class="mode-button" aria-pressed="${state.mode === "reality"}" data-action="mode" data-mode="reality">[ REALITY MODE ]</button>
-        <button class="mode-button" aria-pressed="${state.mode === "matrix"}" data-action="mode" data-mode="matrix">[ MATRIX MODE ]</button>
+        <button class="mode-button" aria-pressed="${state.mode === "reality"}" data-action="mode" data-mode="reality">Reality</button>
+        <button class="mode-button" aria-pressed="${state.mode === "matrix"}" data-action="mode" data-mode="matrix">Matrix</button>
       </div>
       <div class="top-actions">
-        <div class="system-state" aria-live="polite"><span class="state-dot"></span>${state.activityVisible ? renderActivityStatus(state.activityStatus, "activity-status--topbar") : '<span data-system-status>system ready</span>'}</div>
-        <button class="settings-button" data-action="settings-open" aria-label="Open Settings">SETTINGS</button>
+        ${state.activityVisible ? `<div class="system-state" aria-live="polite"><span class="state-dot"></span>${renderActivityStatus(state.activityStatus, "activity-status--topbar")}</div>` : ""}
+        <button class="settings-button" data-action="settings-open" aria-label="Open Settings">Settings</button>
       </div>
     </header>
     <main class="workspace">
@@ -830,7 +821,6 @@ const consoleMarkup = () => `
         </form>
       </section>
     </main>
-    <footer class="footer"><span>NO ACCOUNT REQUIRED</span></footer>
     ${state.error ? `<div class="error-banner" role="alert">${escapeHTML(state.error)}</div>` : ""}
     ${settingsMarkup()}
     ${state.showDeleteModal ? `
@@ -1268,15 +1258,6 @@ const bindEvents = () => {
       if (action === "stop") {
         stopStreaming();
         return;
-      }
-      if (action === "suggestion") {
-        const input = document.querySelector("[data-prompt-input]");
-        if (input) {
-          input.value = element.dataset.prompt || "";
-          state.draft = input.value;
-          input.focus();
-          updateComposer();
-        }
       }
     });
   });
