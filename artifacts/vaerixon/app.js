@@ -26,6 +26,7 @@ const freshState = () => {
     mode: "reality",
     memory,
     messages: memory.getMessages("reality"),
+    welcomeMessage: null,
     draft: "",
     isStreaming: false,
     error: "",
@@ -46,6 +47,7 @@ let wipeGeneration = 0;
 let stopMatrixRain = () => {};
 let matrixRainRunning = false;
 let systemPrompt = "";
+let hasPreviousConversation = false;
 const activeControllers = new Set();
 
 const MODE_PROMPTS = {
@@ -62,6 +64,36 @@ const MODE_PROMPTS = {
     "Increase depth for genuinely complex work, but do not add detail merely to sound more intelligent.",
   ].join(" "),
 };
+
+const getWelcomeText = (mode, returning = false) => {
+  const matrix = mode === "matrix";
+  if (returning) {
+    return matrix
+      ? "Welcome back. What would you like to explore?"
+      : "Welcome back. What would you like to work on?";
+  }
+
+  const hour = new Date().getHours();
+  const salutation = hour < 5 || hour >= 21
+    ? "Good evening"
+    : hour < 12
+      ? "Good morning"
+      : hour < 17
+        ? "Good afternoon"
+        : "Good evening";
+  const choices = matrix
+    ? ["What would you like to explore?", "What should we work through?"]
+    : ["What can I help you with?", "What would you like to work on?"];
+  return `${salutation}. ${choices[Math.floor(Math.random() * choices.length)]}`;
+};
+
+const createWelcomeMessage = (mode, returning = false) => ({
+  id: `welcome-${mode}-${Date.now()}`,
+  role: "assistant",
+  content: getWelcomeText(mode, returning),
+  createdAt: Date.now(),
+  isWelcome: true,
+});
 
 const safeRead = (storage, key) => {
   try {
@@ -106,6 +138,10 @@ const loadSavedState = () => {
     if (!saved.sessions && Array.isArray(saved.messages)) {
       sessions[state.mode] = saved.messages;
     }
+    hasPreviousConversation = Object.values(sessions).some((messages) => (
+      Array.isArray(messages)
+      && messages.some((message) => message?.role === "user" && String(message.content || "").trim())
+    ));
     state.memory = createConversationMemory(sessions);
     state.messages = state.memory.getMessages(state.mode);
   } catch {
@@ -114,6 +150,7 @@ const loadSavedState = () => {
 };
 
 loadSavedState();
+state.welcomeMessage = createWelcomeMessage(state.mode, hasPreviousConversation);
 
 const systemPromptReady = fetch("./system-prompt.txt", { cache: "no-store" })
   .then((response) => (response.ok ? response.text() : ""))
@@ -602,11 +639,17 @@ const renderMessages = (shouldScroll = true) => {
   if (!state.messages.length) {
     target.innerHTML = `
       <div class="empty-state">
-        <h2>What’s on your mind?</h2>
+        <h2>What's on your mind?</h2>
+        ${state.welcomeMessage
+          ? `<p class="welcome-greeting" role="status">${escapeHTML(state.welcomeMessage.content)}</p>`
+          : ""}
       </div>
     `;
   } else {
-    target.innerHTML = state.messages.map(renderMessage).join("");
+    const visibleMessages = state.welcomeMessage
+      ? [...state.messages, state.welcomeMessage]
+      : state.messages;
+    target.innerHTML = visibleMessages.map(renderMessage).join("");
   }
 
   if (shouldScroll) target.scrollTop = target.scrollHeight;
@@ -1123,6 +1166,8 @@ const sendPrompt = async (value) => {
 
   const classification = state.memory.classify(state.mode, prompt);
   const freshness = detectFreshness(prompt);
+  state.welcomeMessage = null;
+  hasPreviousConversation = true;
   state.draft = "";
   state.error = "";
   addMessage("user", prompt);
@@ -1178,6 +1223,7 @@ const deleteAll = () => {
   stopMatrixRain();
   safeClear(localStorage);
   safeClear(sessionStorage);
+  hasPreviousConversation = false;
   const messages = document.querySelector("[data-messages]");
   if (messages) messages.replaceChildren();
   root.replaceChildren();
@@ -1202,6 +1248,11 @@ const bindEvents = () => {
         state.messages = state.memory.setMessages(state.mode, state.messages);
         state.mode = element.dataset.mode;
         state.messages = state.memory.getMessages(state.mode);
+        const hasModeHistory = state.messages.some((message) => message.role === "user");
+        state.welcomeMessage = createWelcomeMessage(
+          state.mode,
+          hasPreviousConversation || hasModeHistory,
+        );
         state.draft = "";
         state.error = "";
         save();
@@ -1251,6 +1302,8 @@ const bindEvents = () => {
       }
       if (action === "initialize") {
         state = freshState();
+        hasPreviousConversation = false;
+        state.welcomeMessage = createWelcomeMessage(state.mode);
         save();
         render();
         return;
