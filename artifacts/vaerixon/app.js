@@ -49,6 +49,9 @@ let matrixRainRunning = false;
 let systemPrompt = "";
 let hasPreviousConversation = false;
 const activeControllers = new Set();
+const copyFeedbackStates = new Map();
+const copyFeedbackTimers = new Map();
+const copyingMessageIds = new Set();
 
 const MODE_PROMPTS = {
   reality: [
@@ -67,23 +70,21 @@ const MODE_PROMPTS = {
 
 const getWelcomeText = (mode, returning = false) => {
   const matrix = mode === "matrix";
-  if (returning) {
-    return matrix
-      ? "Welcome back. What would you like to explore?"
-      : "Welcome back. What would you like to work on?";
-  }
-
   const hour = new Date().getHours();
   const salutation = hour < 5 || hour >= 21
-    ? "Good evening"
+    ? "Good night"
     : hour < 12
       ? "Good morning"
       : hour < 17
         ? "Good afternoon"
         : "Good evening";
   const choices = matrix
-    ? ["What would you like to explore?", "What should we work through?"]
-    : ["What can I help you with?", "What would you like to work on?"];
+    ? returning
+      ? ["Welcome back. What would you like to explore?", "Welcome back. What should we work through?"]
+      : ["What would you like to explore?", "What should we work through?"]
+    : returning
+      ? ["Welcome back to VÆRIXON. What can I help you with?", "Welcome back. What would you like to work on?"]
+      : ["Welcome to VÆRIXON. What can I help you with?", "What would you like to work on today?"];
   return `${salutation}. ${choices[Math.floor(Math.random() * choices.length)]}`;
 };
 
@@ -609,12 +610,149 @@ const formatTime = (timestamp) => new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
 }).format(new Date(timestamp));
 
+const COPY_ICON = `
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <rect x="5.5" y="2.5" width="8" height="10" rx="1.4"></rect>
+    <path d="M10.5 5.5H4.8A1.8 1.8 0 0 0 3 7.3v5.2a1.8 1.8 0 0 0 1.8 1.8H10a1.8 1.8 0 0 0 1.8-1.8V7.3"></path>
+  </svg>
+`;
+
+const copyStateDetails = {
+  idle: { label: "Copy", ariaLabel: "Copy visible message text", disabled: false },
+  copying: { label: "Copy", ariaLabel: "Copying message text", disabled: true },
+  copied: { label: "Copied", ariaLabel: "Message text copied", disabled: true },
+  error: { label: "Copy failed", ariaLabel: "Copy failed. Try again", disabled: false },
+};
+
+const getCopyButtonMarkup = (status = "idle") => {
+  const details = copyStateDetails[status] || copyStateDetails.idle;
+  const icon = status === "idle" || status === "copying" ? COPY_ICON : "";
+  const stateClass = status === "copied" ? " is-copied" : status === "error" ? " is-error" : "";
+  return `
+    <button class="copy-button${stateClass}" type="button" data-action="copy"
+      aria-label="${details.ariaLabel}" title="${details.ariaLabel}" ${details.disabled ? "disabled" : ""}>
+      ${icon}<span class="copy-label" aria-live="polite">${details.label}</span>
+    </button>
+  `;
+};
+
+const setCopyButtonState = (button, status = "idle") => {
+  const details = copyStateDetails[status] || copyStateDetails.idle;
+  const icon = status === "idle" || status === "copying" ? COPY_ICON : "";
+  const stateClass = status === "copied" ? "is-copied" : status === "error" ? "is-error" : "";
+  button.className = `copy-button${stateClass ? ` ${stateClass}` : ""}`;
+  button.disabled = details.disabled;
+  button.setAttribute("aria-label", details.ariaLabel);
+  button.title = details.ariaLabel;
+  button.innerHTML = `${icon}<span class="copy-label" aria-live="polite">${details.label}</span>`;
+};
+
+const updateMessageCopyButtons = (messageId, status) => {
+  document.querySelectorAll(".message").forEach((message) => {
+    if (message.dataset.messageId !== messageId) return;
+    const button = message.querySelector('[data-action="copy"]');
+    if (button) setCopyButtonState(button, status);
+  });
+};
+
+const setCopyFeedback = (messageId, status) => {
+  const currentTimer = copyFeedbackTimers.get(messageId);
+  if (currentTimer) window.clearTimeout(currentTimer);
+  copyFeedbackStates.set(messageId, status);
+  updateMessageCopyButtons(messageId, status);
+  const timer = window.setTimeout(() => {
+    copyFeedbackTimers.delete(messageId);
+    copyFeedbackStates.delete(messageId);
+    updateMessageCopyButtons(messageId, "idle");
+  }, status === "error" ? 1800 : 1300);
+  copyFeedbackTimers.set(messageId, timer);
+};
+
+const getVisibleMessageText = (messageElement) => {
+  const body = messageElement?.querySelector(".message-body");
+  if (!body) return "";
+  return typeof body.innerText === "string" ? body.innerText : body.textContent || "";
+};
+
+const fallbackCopyText = (text) => {
+  const previousFocus = document.activeElement;
+  const clipboardInput = document.createElement("textarea");
+  clipboardInput.value = text;
+  clipboardInput.readOnly = true;
+  clipboardInput.tabIndex = -1;
+  clipboardInput.setAttribute("aria-hidden", "true");
+  clipboardInput.style.position = "fixed";
+  clipboardInput.style.insetInlineStart = "-9999px";
+  clipboardInput.style.opacity = "0";
+  clipboardInput.style.pointerEvents = "none";
+  document.body.append(clipboardInput);
+  clipboardInput.focus({ preventScroll: true });
+  clipboardInput.select();
+  clipboardInput.setSelectionRange(0, text.length);
+
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } finally {
+    clipboardInput.remove();
+    if (previousFocus instanceof HTMLElement) previousFocus.focus({ preventScroll: true });
+  }
+  if (!copied) throw new Error("Clipboard copy was not accepted.");
+};
+
+const writeClipboardText = async (text) => {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Try the selection-based fallback for browsers with restricted clipboard permissions.
+    }
+  }
+  fallbackCopyText(text);
+};
+
+const copyMessage = async (button) => {
+  const message = button.closest(".message");
+  const messageId = message?.dataset.messageId;
+  if (!messageId || button.disabled || copyingMessageIds.has(messageId)) return;
+
+  const text = getVisibleMessageText(message);
+  if (!text.trim()) {
+    setCopyFeedback(messageId, "error");
+    return;
+  }
+
+  copyingMessageIds.add(messageId);
+  setCopyButtonState(button, "copying");
+  try {
+    await writeClipboardText(text);
+    setCopyFeedback(messageId, "copied");
+  } catch {
+    setCopyFeedback(messageId, "error");
+  } finally {
+    copyingMessageIds.delete(messageId);
+    if (!copyFeedbackStates.has(messageId)) {
+      updateMessageCopyButtons(messageId, "idle");
+    }
+  }
+};
+
+const clearCopyFeedback = () => {
+  copyFeedbackTimers.forEach((timer) => window.clearTimeout(timer));
+  copyFeedbackTimers.clear();
+  copyFeedbackStates.clear();
+  copyingMessageIds.clear();
+};
+
 const renderMessage = (message) => {
   const assistant = message.role === "assistant";
   const messageContent = getMessageContent(message, state.messages);
   const content = assistant
     ? markdown(messageContent)
     : `<p>${inlineMarkdown(messageContent).replace(/\n/g, "<br>")}</p>`;
+  const copyStatus = copyFeedbackStates.get(message.id)
+    || (copyingMessageIds.has(message.id) ? "copying" : "idle");
   const activity = message.streaming
     && message.id === state.streamingMessageId
     && state.activityVisible
@@ -625,8 +763,12 @@ const renderMessage = (message) => {
     <article class="message" data-role="${assistant ? "assistant" : "user"}" data-message-id="${message.id}">
       <div class="message-label">${assistant ? "VÆRIXON" : "YOU"}</div>
       <div class="message-content">
-        ${content}${activity}
-        <div class="message-meta">${formatTime(message.createdAt)}</div>
+        <div class="message-body">${content}</div>
+        ${activity}
+        <div class="message-meta">
+          <span class="message-time">${formatTime(message.createdAt)}</span>
+          ${getCopyButtonMarkup(copyStatus)}
+        </div>
       </div>
     </article>
   `;
@@ -1220,6 +1362,7 @@ const deleteAll = () => {
   activeControllers.forEach((controller) => controller.abort());
   activeControllers.clear();
   if (state.controller) state.controller.abort();
+  clearCopyFeedback();
   stopMatrixRain();
   safeClear(localStorage);
   safeClear(sessionStorage);
@@ -1236,7 +1379,7 @@ const bindEvents = () => {
   document.querySelectorAll("[data-action]").forEach((element) => {
     element.addEventListener("click", (event) => {
       const action = element.dataset.action;
-      if (action === "send") return;
+      if (action === "send" || action === "copy") return;
       event.preventDefault();
 
       if (action === "home") {
@@ -1314,6 +1457,17 @@ const bindEvents = () => {
       }
     });
   });
+
+  const messageLog = document.querySelector("[data-messages]");
+  if (messageLog) {
+    messageLog.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+      const button = target?.closest('[data-action="copy"]');
+      if (!button || !messageLog.contains(button)) return;
+      event.preventDefault();
+      void copyMessage(button);
+    });
+  }
 
   const composer = document.querySelector("[data-composer]");
   const input = document.querySelector("[data-prompt-input]");
