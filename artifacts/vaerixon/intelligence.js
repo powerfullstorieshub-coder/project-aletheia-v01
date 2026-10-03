@@ -124,7 +124,7 @@ const inferResponseLength = (normalized, complexity, taskType, followUpIntent = 
 };
 
 const shapeForTask = {
-  math: "a clear worked solution followed by the final answer",
+  math: "the final answer first, followed by a concise calculation check",
   "prompt-building": "a copy-ready prompt using only the useful prompt pillars",
   summary: "a concise summary with the main point first",
   comparison: "a clear comparison using relevant criteria and a practical conclusion",
@@ -301,12 +301,16 @@ export const getIntelligenceInstruction = (analysis = {}, mode = "reality") => {
     hindi: "Language handling: respond in natural Hindi because the user is communicating in Hindi. Keep proper names, product names, model names, programming syntax, URLs, code, and important technical identifiers accurate and in their original form where appropriate.",
     hinglish: "Language handling: respond in natural Hinglish because the user is communicating in Hinglish. Keep important technical terms, proper names, product names, model names, programming syntax, URLs, code, and technical identifiers in accurate original form. Do not translate the user's question unnecessarily.",
   }[safeAnalysis.language] || "Language handling: match the language and style used by the user.";
+  const mathInstruction = safeAnalysis.taskType === "math"
+    ? "Calculation format: state the final numeric answer in the first line, then give a concise calculation or verification. Never put the working before the result."
+    : "";
 
   return [
     "Before answering, silently identify the user's intent, task type, complexity, audience, desired length, domain, and constraints.",
     `Internal request understanding: type=${safeAnalysis.requestType}; task=${safeAnalysis.taskType}; complexity=${safeAnalysis.complexity}; audience=${safeAnalysis.audience}; domain=${safeAnalysis.domain}; desired length=${safeAnalysis.responseLength}; follow-up=${safeAnalysis.followUpIntent || "none"}; constraints=${constraints}.`,
     `Response contract: produce ${safeAnalysis.responseShape}.`,
     languageInstruction,
+    mathInstruction,
     "Detect the user's language from the actual message, including mixed-language input. Do not treat Hindi, Hinglish, or mixed scripts as an error, and do not force English when the user is clearly communicating otherwise.",
     modeInstruction,
     contextInstruction,

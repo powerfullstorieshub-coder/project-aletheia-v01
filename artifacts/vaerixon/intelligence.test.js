@@ -22,6 +22,17 @@ test("request understanding selects concise intent-aware shapes", () => {
   assert.match(tutorial.responseShape, /numbered steps/i);
 });
 
+test("calculation answers lead with the result and keep verification concise", () => {
+  const analysis = analyzeRequest("What is 100 - 12 × 2 + 1?");
+  assert.equal(analysis.taskType, "math");
+  assert.match(analysis.responseShape, /final answer first/i);
+
+  const instruction = getIntelligenceInstruction(analysis, "reality");
+  assert.match(instruction, /final numeric answer in the first line/i);
+  assert.match(instruction, /concise calculation or verification/i);
+  assert.match(instruction, /never put the working before the result/i);
+});
+
 test("complex requests expose decision and critical-thinking contracts", () => {
   const analysis = analyzeRequest(
     "Should I choose option A or option B? Compare the trade-offs, risks, assumptions, and edge cases in detail.",

@@ -57,13 +57,13 @@ const MODE_PROMPTS = {
   reality: [
     "Respond in a clear, direct, highly professional, academic style.",
     "Organize complex answers with useful headings, numbered steps, definitions, and examples.",
-    "For mathematics, show the reasoning step by step, state the rule used at each step, and verify the result.",
+    "For calculations, give the result first, then a concise verification of the arithmetic.",
     "Prefer the shortest complete answer that solves the user's actual problem.",
   ].join(" "),
   matrix: [
     "Respond with deep-dive analytical context, raw signal reasoning, and precise conclusions.",
     "Explore assumptions, mechanisms, patterns, and implications without unnecessary theatrics.",
-    "For mathematics, show every meaningful step, explain the rule used, and verify the result.",
+    "For calculations, lead with the result, then show only the meaningful steps needed to verify it.",
     "Increase depth for genuinely complex work, but do not add detail merely to sound more intelligent.",
   ].join(" "),
 };
@@ -391,61 +391,43 @@ const getOfflineMathResponse = (prompt, analysis = {}) => {
   if (compact === "100-12*2+1") {
     if (language === "hindi") {
       return [
-        "**100 - 12 × 2 + 1** को order of operations के अनुसार हल करते हैं।",
-        "",
-        "1. पहले multiplication: **12 × 2 = 24**।",
-        "2. अब expression: **100 - 24 + 1**।",
-        "3. बाएँ से दाएँ हल करें: **100 - 24 = 76**, फिर **76 + 1 = 77**।",
-        "",
         "**अंतिम उत्तर: 77**",
+        "",
+        "पहले 12 × 2 = 24; फिर 100 - 24 + 1 = 77।",
       ].join("\n");
     }
     if (language === "hinglish") {
       return [
-        "**100 - 12 × 2 + 1** ko order of operations ke according solve karte hain.",
-        "",
-        "1. Pehle multiplication: **12 × 2 = 24**.",
-        "2. Expression ab **100 - 24 + 1** hai.",
-        "3. Left se right solve karein: **100 - 24 = 76**, phir **76 + 1 = 77**.",
-        "",
         "**Final answer: 77**",
+        "",
+        "Pehle 12 × 2 = 24; phir 100 - 24 + 1 = 77.",
       ].join("\n");
     }
     return [
-      "Let’s solve **100 - 12 × 2 + 1** using the order of operations.",
+      "**Answer: 77**",
       "",
-      "1. Multiply first: **12 × 2 = 24**.",
-      "2. Substitute: **100 - 24 + 1**.",
-      "3. Work left to right: **100 - 24 = 76**, then **76 + 1 = 77**.",
-      "",
-      "**Final answer: 77**",
+      "12 × 2 = 24, so 100 - 24 + 1 = 77.",
     ].join("\n");
   }
 
   if (language === "hindi") {
     return [
-      `**${expression}** को step by step हल करते हैं।`,
+      `**परिणाम: ${result}**`,
       "",
-      "1. Addition या subtraction से पहले multiplication, division और exponents लागू करें।",
-      "2. बाकी operations को बाएँ से दाएँ हल करें।",
-      `3. परिणाम **${result}** है।`,
+      `Standard order of operations के अनुसार **${expression} = ${result}**।`,
     ].join("\n");
   }
   if (language === "hinglish") {
     return [
-      `**${expression}** ko step by step solve karte hain.`,
+      `**Result: ${result}**`,
       "",
-      "1. Addition ya subtraction se pehle multiplication, division aur exponents apply karein.",
-      "2. Baaki operations ko left se right evaluate karein.",
-      `3. Result **${result}** hai.`,
+      `Standard order of operations ke according **${expression} = ${result}**.`,
     ].join("\n");
   }
   return [
-    `Let’s solve **${expression}** step by step.`,
+    `**Answer: ${result}**`,
     "",
-    "1. Apply multiplication, division, and exponents before addition or subtraction.",
-    "2. Evaluate the remaining operations from left to right.",
-    `3. The result is **${result}**.`,
+    `Using standard order of operations: **${expression} = ${result}**.`,
   ].join("\n");
 };
 
