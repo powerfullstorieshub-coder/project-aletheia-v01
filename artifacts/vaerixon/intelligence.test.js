@@ -33,6 +33,10 @@ test("calculation answers lead with the result and keep verification concise", (
   assert.match(instruction, /never put the working before the result/i);
 });
 
+test("modulo expressions are classified as calculations", () => {
+  assert.equal(analyzeRequest("What is 17 % 5?").taskType, "math");
+});
+
 test("complex requests expose decision and critical-thinking contracts", () => {
   const analysis = analyzeRequest(
     "Should I choose option A or option B? Compare the trade-offs, risks, assumptions, and edge cases in detail.",

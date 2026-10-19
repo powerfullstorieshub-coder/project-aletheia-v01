@@ -1,2 +1,3 @@
 - [Knowledge routing](knowledge-routing.md) — shape stable local answers by intent; use external generation for freshness or unsupported multi-topic work.
 - [GitHub publishing](github-publishing.md) — when the local remote is only the Replit backup, publish verified trees through the connected GitHub API after comparing refs.
+- [GitHub CLI authentication](github-cli-auth.md) — verify actual workspace pushes; a healthy Replit connection may not authenticate shell Git.

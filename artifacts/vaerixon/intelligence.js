@@ -83,7 +83,7 @@ const hasArithmeticExpression = (prompt) => {
     .replace(/[?=]+$/, "")
     .trim();
 
-  return Boolean(candidate && /^[\d+\-*/^().\s]+$/.test(candidate));
+  return Boolean(candidate && /^[\d+\-*/%^().\s]+$/.test(candidate));
 };
 
 const hasConversationContext = (conversation) => Array.isArray(conversation)

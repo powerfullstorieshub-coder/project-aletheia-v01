@@ -14,6 +14,7 @@ import {
   getIntelligenceInstruction as buildIntelligenceInstruction,
   normalizePrompt,
 } from "./intelligence.js";
+import { calculateExpression } from "./calculation-engine.js";
 
 const root = document.getElementById("root");
 const canvas = document.getElementById("matrixCanvas");
@@ -308,83 +309,17 @@ const arithmeticExpressionFromPrompt = (prompt) => {
     .replace(/[?=]+$/, "")
     .trim();
 
-  return /^[\d+\-*/^().\s]+$/.test(candidate) ? candidate : "";
-};
-
-const evaluateArithmetic = (expression) => {
-  const compact = expression.replace(/\s+/g, "");
-  const tokens = compact.match(/(?:\d+(?:\.\d+)?|[()+\-*/^])/g);
-  if (!tokens || tokens.join("") !== compact) return null;
-  if (tokens.some((token, index) => (
-    token === "-"
-    && index > 0
-    && ["+", "-", "*", "/", "^", "("].includes(tokens[index - 1])
-  ))) return null;
-  if (tokens[0] === "-") tokens.unshift("0");
-
-  const precedence = { "+": 1, "-": 1, "*": 2, "/": 2, "^": 3 };
-  const values = [];
-  const operators = [];
-
-  const applyTopOperator = () => {
-    const operator = operators.pop();
-    const right = values.pop();
-    const left = values.pop();
-    if (left === undefined || right === undefined) throw new Error("invalid expression");
-    if (operator === "/" && right === 0) throw new Error("division by zero");
-    values.push({
-      "+": () => left + right,
-      "-": () => left - right,
-      "*": () => left * right,
-      "/": () => left / right,
-      "^": () => left ** right,
-    }[operator]());
-  };
-
-  try {
-    tokens.forEach((token) => {
-      if (/^\d/.test(token)) {
-        values.push(Number(token));
-        return;
-      }
-      if (token === "(") {
-        operators.push(token);
-        return;
-      }
-      if (token === ")") {
-        while (operators.length && operators.at(-1) !== "(") applyTopOperator();
-        if (operators.pop() !== "(") throw new Error("invalid expression");
-        return;
-      }
-
-      while (
-        operators.length
-        && operators.at(-1) !== "("
-        && precedence[operators.at(-1)] >= precedence[token]
-        && token !== "^"
-      ) {
-        applyTopOperator();
-      }
-      operators.push(token);
-    });
-
-    while (operators.length) {
-      if (operators.at(-1) === "(") throw new Error("invalid expression");
-      applyTopOperator();
-    }
-
-    if (values.length !== 1 || !Number.isFinite(values[0])) return null;
-    return values[0];
-  } catch {
-    return null;
-  }
+  return /^[\d+\-*/%^().\s]+$/.test(candidate) ? candidate : "";
 };
 
 const getOfflineMathResponse = (prompt, analysis = {}) => {
   const expression = arithmeticExpressionFromPrompt(prompt);
   if (!expression) return "";
-  const result = evaluateArithmetic(expression);
-  if (result === null) return "";
+  const calculation = calculateExpression(expression);
+  if (!calculation.ok) {
+    return `**Calculation error:** ${calculation.error.message}`;
+  }
+  const result = calculation.value;
   const language = analysis.language || "english";
 
   const compact = expression.replace(/\s+/g, "");
