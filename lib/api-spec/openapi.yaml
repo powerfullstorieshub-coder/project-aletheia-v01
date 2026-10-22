@@ -10,7 +10,58 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: calculations
+    description: Versioned calculation operations
 paths:
+  /v1/calculate:
+    post:
+      operationId: calculateExpression
+      tags: [calculations]
+      summary: Evaluate a safe arithmetic expression
+      description: Public, unauthenticated endpoint backed by the VÆRIXON Calculation Engine.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalculationInput"
+      responses:
+        "200":
+          description: Expression calculated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalculationSuccess"
+        "400":
+          description: Malformed JSON or invalid request shape
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalculationErrorResponse"
+        "413":
+          description: Request body exceeds the 8 KiB limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalculationErrorResponse"
+        "415":
+          description: Request content type is not application/json
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalculationErrorResponse"
+        "422":
+          description: Expression is invalid or cannot produce a finite real result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalculationErrorResponse"
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalculationErrorResponse"
   /healthz:
     get:
       operationId: healthCheck
@@ -26,6 +77,66 @@ paths:
                 $ref: "#/components/schemas/HealthStatus"
 components:
   schemas:
+    CalculationInput:
+      type: object
+      properties:
+        expression:
+          type: string
+          minLength: 1
+          maxLength: 256
+      required:
+        - expression
+      additionalProperties: false
+    CalculationSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        expression:
+          type: string
+        result:
+          type: number
+      required:
+        - success
+        - expression
+        - result
+      additionalProperties: false
+    CalculationErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          $ref: "#/components/schemas/CalculationError"
+      required:
+        - success
+        - error
+      additionalProperties: false
+    CalculationError:
+      type: object
+      properties:
+        code:
+          type: string
+          enum:
+            - INVALID_JSON
+            - INVALID_REQUEST
+            - PAYLOAD_TOO_LARGE
+            - UNSUPPORTED_MEDIA_TYPE
+            - INVALID_EXPRESSION
+            - DIVISION_BY_ZERO
+            - MODULO_BY_ZERO
+            - UNSUPPORTED_OPERATION
+            - EXPRESSION_TOO_LONG
+            - EXPRESSION_TOO_COMPLEX
+            - INTERNAL_SERVER_ERROR
+        message:
+          type: string
+      required:
+        - code
+        - message
+      additionalProperties: false
     HealthStatus:
       type: object
       properties:

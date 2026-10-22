@@ -4,6 +4,9 @@
   "files": [],
   "references": [
     {
+      "path": "./lib/calculation-engine"
+    },
+    {
       "path": "./lib/db"
     },
     {

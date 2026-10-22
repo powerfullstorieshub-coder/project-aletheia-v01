@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import apiErrorHandler from "./middlewares/api-error-handler";
 
 const app: Express = express();
 
@@ -26,9 +27,10 @@ app.use(
   }),
 );
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "8kb", strict: false }));
+app.use(express.urlencoded({ extended: true, limit: "8kb" }));
 
 app.use("/api", router);
+app.use(apiErrorHandler);
 
 export default app;
