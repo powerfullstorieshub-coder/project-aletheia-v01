@@ -20,6 +20,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AiChatErrorResponse,
+  AiChatInput,
   CalculationErrorResponse,
   CalculationInput,
   CalculationSuccess,
@@ -140,6 +142,95 @@ export const useCalculateExpression = <TError = ErrorType<CalculationErrorRespon
         TContext
       > => {
       return useMutation(getCalculateExpressionMutationOptions(options));
+    }
+
+export const getCreateAiChatCompletionUrl = () => {
+
+
+
+
+  return `/api/v1/ai/chat`
+}
+
+/**
+ * Proxies OpenAI-compatible chat messages to Pollinations using a server-side secret key. The key is never accepted from or returned to the client.
+ * @summary Stream a VÆRIXON chat completion
+ */
+export const createAiChatCompletion = async (aiChatInput: AiChatInput, options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<string>(getCreateAiChatCompletionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(aiChatInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAiChatCompletionMutationKey = () => ['createAiChatCompletion'] as const;
+
+export const getCreateAiChatCompletionMutationOptions = <TError = ErrorType<AiChatErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAiChatCompletion>>, TError,CreateAiChatCompletionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAiChatCompletion>>, TError,CreateAiChatCompletionMutationVariables, TContext> => {
+
+const mutationKey = getCreateAiChatCompletionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAiChatCompletion>>, CreateAiChatCompletionMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAiChatCompletion(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAiChatCompletionMutationResult = NonNullable<Awaited<ReturnType<typeof createAiChatCompletion>>>
+    export type CreateAiChatCompletionMutationBody = BodyType<AiChatInput>
+    export type CreateAiChatCompletionMutationError = ErrorType<AiChatErrorResponse>
+    export type CreateAiChatCompletionMutationVariables = {data: BodyType<AiChatInput>}
+
+    /**
+ * @summary Stream a VÆRIXON chat completion
+ */
+export const useCreateAiChatCompletion = <TError = ErrorType<AiChatErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAiChatCompletion>>, TError,CreateAiChatCompletionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAiChatCompletion>>,
+        TError,
+        CreateAiChatCompletionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateAiChatCompletionMutationOptions(options));
     }
 
 export const getHealthCheckUrl = () => {

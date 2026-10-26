@@ -28,6 +28,25 @@ export const CalculateExpressionResponse = zod.object({
 
 
 /**
+ * Proxies OpenAI-compatible chat messages to Pollinations using a server-side secret key. The key is never accepted from or returned to the client.
+ * @summary Stream a VÆRIXON chat completion
+ */
+
+export const createAiChatCompletionBodyMessagesMax = 50;
+
+
+
+export const CreateAiChatCompletionBody = zod.object({
+  "messages": zod.array(zod.object({
+  "role": zod.enum(['system', 'user', 'assistant']),
+  "content": zod.string().min(1)
+})).min(1).max(createAiChatCompletionBodyMessagesMax)
+})
+
+export const CreateAiChatCompletionResponse = zod.unknown()
+
+
+/**
  * Returns server health status
  * @summary Health check
  */

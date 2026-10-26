@@ -6,6 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './aiChatError';
+export * from './aiChatErrorCode';
+export * from './aiChatErrorResponse';
+export * from './aiChatInput';
+export * from './aiChatMessage';
+export * from './aiChatMessageRole';
 export * from './calculationError';
 export * from './calculationErrorCode';
 export * from './calculationErrorResponse';

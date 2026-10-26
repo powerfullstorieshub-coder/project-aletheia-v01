@@ -19,7 +19,6 @@ import { calculateExpression } from "./calculation-engine.js";
 const root = document.getElementById("root");
 const canvas = document.getElementById("matrixCanvas");
 const STORAGE_KEY = "vaerixon-console-v015";
-const ENDPOINT = "https://text.pollinations.ai/";
 
 const freshState = () => {
   const memory = createConversationMemory();
@@ -1018,6 +1017,11 @@ const extractText = (payload) => {
 
   try {
     const parsed = JSON.parse(value);
+    if (parsed.error) {
+      const error = new Error("The live AI request failed.");
+      error.code = parsed.error.code || "AI_PROVIDER_UNAVAILABLE";
+      throw error;
+    }
     return parsed.choices?.[0]?.delta?.content
       || parsed.choices?.[0]?.message?.content
       || parsed.choices?.[0]?.text
@@ -1025,9 +1029,33 @@ const extractText = (payload) => {
       || parsed.content
       || parsed.text
       || "";
-  } catch {
+  } catch (error) {
+    if (error?.code) throw error;
     return value;
   }
+};
+
+const aiErrorMessages = {
+  INVALID_JSON: "The request body must contain valid JSON.",
+  PAYLOAD_TOO_LARGE: "The conversation is too long. Start a new chat and try again.",
+  INTERNAL_SERVER_ERROR: "An unexpected server error occurred.",
+  AI_NOT_CONFIGURED: "Live AI is not configured on this server.",
+  AI_INVALID_REQUEST: "The chat request is invalid. Please try again.",
+  AI_ORIGIN_REJECTED: "This chat request came from an untrusted page.",
+  AI_RATE_LIMITED: "The AI provider is receiving too many requests. Wait a moment and try again.",
+  AI_AUTHENTICATION_FAILED: "Live AI authentication failed. Check the server's Pollinations key.",
+  AI_QUOTA_EXHAUSTED: "The AI provider quota or key budget is exhausted. Check the Pollinations account balance.",
+  AI_UNSUPPORTED_MODEL: "The configured AI model is unavailable or unsupported.",
+  AI_PROVIDER_UNAVAILABLE: "The AI provider is temporarily unavailable. Please try again.",
+  AI_NETWORK_ERROR: "The AI provider could not be reached. Please try again.",
+  AI_TIMEOUT: "The AI provider timed out. Please try again.",
+  AI_INVALID_RESPONSE: "The AI provider returned an invalid response. Please try again.",
+};
+
+const getAiErrorMessage = (error) => {
+  if (error?.code && aiErrorMessages[error.code]) return aiErrorMessages[error.code];
+  if (error?.name === "TypeError") return aiErrorMessages.AI_NETWORK_ERROR;
+  return "The live AI request could not be completed. Please try again.";
 };
 
 const appendAssistantText = (assistant, text) => {
@@ -1087,7 +1115,7 @@ const requestResponse = async (
     throw new DOMException("Generation stopped", "AbortError");
   }
 
-  const response = await fetch(`${ENDPOINT}?stream=true`, {
+  const response = await fetch("/api/v1/ai/chat", {
     method: "POST",
     headers: {
       Accept: "text/event-stream, text/plain, application/json",
@@ -1095,15 +1123,27 @@ const requestResponse = async (
     },
     body: JSON.stringify({
       messages: getChatHistory(prompt, analysis, route),
-      model: "openai",
     }),
     signal: controller.signal,
   });
   const contentType = response.headers.get("content-type") || "";
 
   if (!response.ok || contentType.includes("text/html")) {
-    if (response.body?.cancel) await response.body.cancel();
-    throw new Error("Primary external signal unavailable");
+    let code = "AI_PROVIDER_UNAVAILABLE";
+    if (contentType.includes("application/json")) {
+      try {
+        const payload = await response.json();
+        code = payload?.error?.code || code;
+      } catch {
+        code = "AI_INVALID_RESPONSE";
+      }
+    }
+    if (!contentType.includes("application/json") && response.body?.cancel) {
+      await response.body.cancel().catch(() => undefined);
+    }
+    const error = new Error("The live AI request failed.");
+    error.code = code;
+    throw error;
   }
 
   return response;
@@ -1169,25 +1209,39 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
     const response = await requestResponse(prompt, controller, analysis, route);
     await consumeResponse(response, assistant, controller);
     if (generation !== wipeGeneration) return;
+    const completedResponse = cleanAssistantOutput(assistant.content);
+    if (!completedResponse) {
+      const error = new Error("The AI provider returned no assistant text.");
+      error.code = "AI_INVALID_RESPONSE";
+      throw error;
+    }
     assistant.streaming = false;
     state.isStreaming = false;
     state.controller = null;
     state.streamingMessageId = null;
     state.error = "";
-    assistant.content = cleanAssistantOutput(assistant.content)
-      || "I couldn't complete that response. Please try again.";
+    assistant.content = completedResponse;
     clearActivityStatus({ rerender: false });
     save();
     render();
   } catch (error) {
     if (generation !== wipeGeneration) return;
     const stopped = error?.name === "AbortError" || controller.signal.aborted;
+    const partialResponse = cleanAssistantOutput(assistant.content);
+    let usedOfflineFallback = false;
     if (stopped) {
-      assistant.content = cleanAssistantOutput(assistant.content)
-        || "Generation stopped by operator.";
-    } else {
+      assistant.content = partialResponse || "Generation stopped by operator.";
+    } else if (partialResponse) {
+      assistant.content = partialResponse;
+    } else if (route.kind === "research") {
       assistant.content = cleanAssistantOutput(
         getResearchFailureResponse(prompt, analysis, route, localKnowledgeResponse),
+      );
+      usedOfflineFallback = true;
+    } else {
+      state.messages = state.memory.setMessages(
+        state.mode,
+        state.messages.filter((message) => message.id !== assistant.id),
       );
     }
     assistant.streaming = false;
@@ -1196,8 +1250,13 @@ const streamAnswer = async (prompt, assistant, controller, generation) => {
     state.streamingMessageId = null;
     state.error = stopped
       ? "Generation stopped. The partial response remains in the console."
-      : "";
-    state.showOfflineModal = !stopped;
+      : getAiErrorMessage(error);
+    if (!stopped && usedOfflineFallback) {
+      state.error += " An offline fallback is shown below; it is not a live answer.";
+    } else if (!stopped && partialResponse) {
+      state.error += " The text shown is only a partial response.";
+    }
+    state.showOfflineModal = !stopped && Boolean(route.requiresFreshResearch);
     clearActivityStatus({ rerender: false });
     save();
     render();

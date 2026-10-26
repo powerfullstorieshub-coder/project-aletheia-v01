@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: calculations
     description: Versioned calculation operations
+  - name: ai
+    description: Secure VÆRIXON chat generation
 paths:
   /v1/calculate:
     post:
@@ -62,6 +64,81 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CalculationErrorResponse"
+  /v1/ai/chat:
+    post:
+      operationId: createAiChatCompletion
+      tags: [ai]
+      summary: Stream a VÆRIXON chat completion
+      description: >
+        Proxies OpenAI-compatible chat messages to Pollinations using a server-side
+        secret key. The key is never accepted from or returned to the client.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiChatInput"
+      responses:
+        "200":
+          description: OpenAI-compatible server-sent event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          description: Malformed JSON or invalid chat messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChatErrorResponse"
+        "403":
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChatErrorResponse"
+        "413":
+          description: Request body exceeds the chat request limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChatErrorResponse"
+        "415":
+          description: Request content type is not application/json
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChatErrorResponse"
+        "429":
+          description: Provider or local request rate limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChatErrorResponse"
+        "502":
+          description: Provider authentication, model, network, or response failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChatErrorResponse"
+        "503":
+          description: Provider is unavailable or the server key is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChatErrorResponse"
+        "504":
+          description: Provider request timed out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChatErrorResponse"
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChatErrorResponse"
   /healthz:
     get:
       operationId: healthCheck
@@ -144,4 +221,68 @@ components:
           type: string
       required:
         - status
+    AiChatMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [system, user, assistant]
+        content:
+          type: string
+          minLength: 1
+      required:
+        - role
+        - content
+      additionalProperties: false
+    AiChatInput:
+      type: object
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/AiChatMessage"
+      required:
+        - messages
+      additionalProperties: false
+    AiChatErrorCode:
+      type: string
+      enum:
+        - INVALID_JSON
+        - PAYLOAD_TOO_LARGE
+        - INTERNAL_SERVER_ERROR
+        - AI_NOT_CONFIGURED
+        - AI_INVALID_REQUEST
+        - AI_ORIGIN_REJECTED
+        - AI_RATE_LIMITED
+        - AI_AUTHENTICATION_FAILED
+        - AI_QUOTA_EXHAUSTED
+        - AI_UNSUPPORTED_MODEL
+        - AI_PROVIDER_UNAVAILABLE
+        - AI_NETWORK_ERROR
+        - AI_TIMEOUT
+        - AI_INVALID_RESPONSE
+    AiChatError:
+      type: object
+      properties:
+        code:
+          $ref: "#/components/schemas/AiChatErrorCode"
+        message:
+          type: string
+      required:
+        - code
+        - message
+      additionalProperties: false
+    AiChatErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          $ref: "#/components/schemas/AiChatError"
+      required:
+        - error
+      additionalProperties: false
 

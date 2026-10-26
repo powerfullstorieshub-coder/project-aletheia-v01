@@ -49,3 +49,56 @@ export interface CalculationErrorResponse {
 export interface HealthStatus {
   status: string;
 }
+
+export type AiChatMessageRole = typeof AiChatMessageRole[keyof typeof AiChatMessageRole];
+
+
+export const AiChatMessageRole = {
+  system: 'system',
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export interface AiChatMessage {
+  role: AiChatMessageRole;
+  /** @minLength 1 */
+  content: string;
+}
+
+export interface AiChatInput {
+  /**
+     * @minItems 1
+     * @maxItems 50
+     */
+  messages: AiChatMessage[];
+}
+
+export type AiChatErrorCode = typeof AiChatErrorCode[keyof typeof AiChatErrorCode];
+
+
+export const AiChatErrorCode = {
+  INVALID_JSON: 'INVALID_JSON',
+  PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
+  INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR',
+  AI_NOT_CONFIGURED: 'AI_NOT_CONFIGURED',
+  AI_INVALID_REQUEST: 'AI_INVALID_REQUEST',
+  AI_ORIGIN_REJECTED: 'AI_ORIGIN_REJECTED',
+  AI_RATE_LIMITED: 'AI_RATE_LIMITED',
+  AI_AUTHENTICATION_FAILED: 'AI_AUTHENTICATION_FAILED',
+  AI_QUOTA_EXHAUSTED: 'AI_QUOTA_EXHAUSTED',
+  AI_UNSUPPORTED_MODEL: 'AI_UNSUPPORTED_MODEL',
+  AI_PROVIDER_UNAVAILABLE: 'AI_PROVIDER_UNAVAILABLE',
+  AI_NETWORK_ERROR: 'AI_NETWORK_ERROR',
+  AI_TIMEOUT: 'AI_TIMEOUT',
+  AI_INVALID_RESPONSE: 'AI_INVALID_RESPONSE',
+} as const;
+
+export interface AiChatError {
+  code: AiChatErrorCode;
+  message: string;
+}
+
+export interface AiChatErrorResponse {
+  success?: false;
+  error: AiChatError;
+}
