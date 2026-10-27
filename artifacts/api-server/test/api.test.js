@@ -52,10 +52,23 @@ const postAiChat = (messages = defaultChatMessages, headers = { "content-type": 
   });
 
 const withMockedPollinations = async (respond, run, options = {}) => {
-  const previousKey = process.env.POLLINATIONS_KEY;
-  const previousTimeout = process.env.POLLINATIONS_TIMEOUT_MS;
+  const providerEnvironmentKeys = [
+    "POLLINATIONS_KEY",
+    "POLLINATIONS_TIMEOUT_MS",
+    "POLLINATIONS_ENABLED",
+    "POLLINATIONS_MODEL",
+    "AI_PRIMARY_PROVIDER",
+    "AI_PROVIDER_TIMEOUT_MS",
+    "AI_FALLBACK_PROVIDERS",
+    "AI_FALLBACK_ON",
+    "AI_FALLBACK_ALLOW_SENSITIVE_DATA",
+  ];
+  const previousEnvironment = new Map(
+    providerEnvironmentKeys.map((key) => [key, process.env[key]]),
+  );
   const originalFetch = globalThis.fetch;
   const calls = [];
+  providerEnvironmentKeys.forEach((key) => delete process.env[key]);
   if (options.key === null) {
     delete process.env.POLLINATIONS_KEY;
   } else {
@@ -66,6 +79,8 @@ const withMockedPollinations = async (respond, run, options = {}) => {
   } else {
     process.env.POLLINATIONS_TIMEOUT_MS = String(options.timeoutMs);
   }
+  if (options.enabled === false) process.env.POLLINATIONS_ENABLED = "false";
+  if (options.environment) Object.assign(process.env, options.environment);
 
   globalThis.fetch = async (input, init) => {
     if (String(input) === "https://gen.pollinations.ai/v1/chat/completions") {
@@ -79,10 +94,10 @@ const withMockedPollinations = async (respond, run, options = {}) => {
     return await run(calls);
   } finally {
     globalThis.fetch = originalFetch;
-    if (previousKey === undefined) delete process.env.POLLINATIONS_KEY;
-    else process.env.POLLINATIONS_KEY = previousKey;
-    if (previousTimeout === undefined) delete process.env.POLLINATIONS_TIMEOUT_MS;
-    else process.env.POLLINATIONS_TIMEOUT_MS = previousTimeout;
+    for (const [key, value] of previousEnvironment) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   }
 };
 
