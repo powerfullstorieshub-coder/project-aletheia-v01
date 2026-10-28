@@ -28,7 +28,7 @@ export const CalculateExpressionResponse = zod.object({
 
 
 /**
- * Proxies OpenAI-compatible chat messages to Pollinations using a server-side secret key. The key is never accepted from or returned to the client.
+ * Sends OpenAI-compatible chat messages through the server-configured AI provider. Provider credentials are server-side and are never accepted from or returned to the client.
  * @summary Stream a VÆRIXON chat completion
  */
 

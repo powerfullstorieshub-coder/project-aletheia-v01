@@ -201,6 +201,19 @@ test("reports missing Pollinations credentials without making an upstream reques
   );
 });
 
+test("does not call a disabled configured provider", async () => {
+  await withMockedPollinations(
+    () => assert.fail("A disabled provider must not receive requests."),
+    async (calls) => {
+      const response = await postAiChat();
+      assert.equal(response.status, 503);
+      assert.match(await response.text(), /AI_NOT_CONFIGURED/);
+      assert.equal(calls.length, 0);
+    },
+    { enabled: false },
+  );
+});
+
 test("maps Pollinations authentication failures without retrying or exposing provider details", async () => {
   await withMockedPollinations(
     () => providerError(401),
@@ -237,6 +250,19 @@ test("respects provider rate-limit backoff and returns a concise error", async (
       assert.match(body, /AI_RATE_LIMITED/);
       assert.doesNotMatch(body, /private provider detail/);
       assert.equal(calls.length, 2);
+    },
+  );
+});
+
+test("does not retry beyond a provider's longer rate-limit guidance", async () => {
+  await withMockedPollinations(
+    () => providerError(429, "30"),
+    async (calls) => {
+      const response = await postAiChat();
+      assert.equal(response.status, 429);
+      assert.equal(response.headers.get("retry-after"), "30");
+      assert.match(await response.text(), /AI_RATE_LIMITED/);
+      assert.equal(calls.length, 1);
     },
   );
 });

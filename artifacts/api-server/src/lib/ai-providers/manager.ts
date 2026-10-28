@@ -2,8 +2,6 @@ import type { AiProviderManagerConfig } from "./config";
 import {
   AiProviderError,
   type AiProvider,
-  type AiProviderCompletion,
-  type AiProviderErrorCode,
   type AiProviderMessage,
   type AiProviderParameters,
   type ManagedAiCompletion,
@@ -13,13 +11,13 @@ type AttemptScope = {
   readonly signal: AbortSignal;
   readonly timedOut: boolean;
   run<T>(operation: () => Promise<T>): Promise<T>;
-  error(providerId: string): AiProviderError;
   cleanup(): void;
 };
 
 const createAttemptScope = (
   parentSignal: AbortSignal | undefined,
   timeoutMs: number,
+  providerId: string,
 ): AttemptScope => {
   const controller = new AbortController();
   let didTimeOut = false;
@@ -36,13 +34,13 @@ const createAttemptScope = (
     controller.abort();
   }, timeoutMs);
 
-  const error = (providerId: string): AiProviderError =>
+  const error = (): AiProviderError =>
     new AiProviderError(didTimeOut ? "timeout" : "cancelled", providerId);
 
   const run = <T>(operation: () => Promise<T>): Promise<T> =>
     new Promise<T>((resolve, reject) => {
       if (controller.signal.aborted) {
-        reject(error(""));
+        reject(error());
         return;
       }
 
@@ -51,7 +49,7 @@ const createAttemptScope = (
         if (settled) return;
         settled = true;
         controller.signal.removeEventListener("abort", onAbort);
-        reject(error(""));
+        reject(error());
       };
 
       controller.signal.addEventListener("abort", onAbort, { once: true });
@@ -79,7 +77,6 @@ const createAttemptScope = (
       return didTimeOut;
     },
     run,
-    error,
     cleanup: () => {
       clearTimeout(timer);
       parentSignal?.removeEventListener("abort", onParentAbort);
@@ -89,22 +86,24 @@ const createAttemptScope = (
 
 const normalizeAttemptError = (
   error: unknown,
-  scope: AttemptScope,
   providerId: string,
+  scope?: Pick<AttemptScope, "timedOut" | "signal">,
 ): AiProviderError => {
-  if (scope.timedOut) return new AiProviderError("timeout", providerId);
-  if (scope.signal.aborted) return new AiProviderError("cancelled", providerId);
+  if (scope?.timedOut) return new AiProviderError("timeout", providerId);
+  if (scope?.signal.aborted) return new AiProviderError("cancelled", providerId);
   if (error instanceof AiProviderError) return error;
   return new AiProviderError("network_error", providerId);
 };
 
 export class AiProviderManager {
   private readonly providers = new Map<string, AiProvider>();
+  private readonly config: AiProviderManagerConfig;
 
   constructor(
     providers: readonly AiProvider[],
-    private readonly config: AiProviderManagerConfig,
+    config: AiProviderManagerConfig,
   ) {
+    this.config = config;
     for (const provider of providers) {
       if (!provider.id.trim() || this.providers.has(provider.id)) {
         throw new Error("AI provider IDs must be non-empty and unique.");
@@ -146,10 +145,6 @@ export class AiProviderManager {
     } catch (primaryError) {
       const normalizedPrimary = normalizeAttemptError(
         primaryError,
-        {
-          timedOut: false,
-          signal: input.signal ?? new AbortController().signal,
-        } as AttemptScope,
         primary.provider.id,
       );
 
@@ -181,10 +176,6 @@ export class AiProviderManager {
         } catch (fallbackError) {
           lastFailure = normalizeAttemptError(
             fallbackError,
-            {
-              timedOut: false,
-              signal: input.signal ?? new AbortController().signal,
-            } as AttemptScope,
             fallbackId,
           );
           if (!this.config.fallbackOn.includes(lastFailure.code)) {
@@ -237,7 +228,7 @@ export class AiProviderManager {
     parentSignal: AbortSignal | undefined,
     usedFallback: boolean,
   ): Promise<ManagedAiCompletion> {
-    const scope = createAttemptScope(parentSignal, timeoutMs);
+    const scope = createAttemptScope(parentSignal, timeoutMs, provider.id);
 
     try {
       const completion = await scope.run(() =>
@@ -289,7 +280,7 @@ export class AiProviderManager {
             yield next.value;
           }
         } catch (error) {
-          throw normalizeAttemptError(error, scope, provider.id);
+          throw normalizeAttemptError(error, provider.id, scope);
         } finally {
           if (!completed && iterator.return) {
             void Promise.resolve(iterator.return()).catch(() => undefined);
@@ -307,12 +298,7 @@ export class AiProviderManager {
       };
     } catch (error) {
       scope.cleanup();
-      throw normalizeAttemptError(error, scope, provider.id);
+      throw normalizeAttemptError(error, provider.id, scope);
     }
   }
 }
-
-export const isEligibleFallbackError = (
-  code: AiProviderErrorCode,
-  config: AiProviderManagerConfig,
-): boolean => config.fallbackOn.includes(code);

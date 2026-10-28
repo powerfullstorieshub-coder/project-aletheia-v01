@@ -1,12 +1,32 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { build } from "esbuild";
 import {
   DEFAULT_AI_PROVIDER_TIMEOUT_MS,
   DEFAULT_POLLINATIONS_MODEL,
   readAiProviderManagerConfig,
 } from "../src/lib/ai-providers/config.ts";
-import { AiProviderManager } from "../src/lib/ai-providers/manager.ts";
-import { AiProviderError } from "../src/lib/ai-providers/types.ts";
+
+const bundledProviderApi = await build({
+  stdin: {
+    contents: [
+      'export { AiProviderManager } from "./src/lib/ai-providers/manager.ts";',
+      'export { AiProviderError } from "./src/lib/ai-providers/types.ts";',
+    ].join("\n"),
+    resolveDir: process.cwd(),
+    sourcefile: "ai-provider-test-entry.ts",
+    loader: "ts",
+  },
+  bundle: true,
+  format: "esm",
+  platform: "node",
+  write: false,
+});
+const { AiProviderManager, AiProviderError } = await import(
+  `data:text/javascript;base64,${Buffer.from(
+    bundledProviderApi.outputFiles[0].text,
+  ).toString("base64")}`
+);
 
 const messages = [
   { role: "system", content: "Private conversation instructions." },
@@ -336,17 +356,26 @@ test("cancellation propagates through a normalized streaming provider", async ()
 
 test("unsupported provider parameters are rejected before any provider call", async () => {
   let calls = 0;
+  let fallbackCalls = 0;
   const primary = fakeProvider({
     complete: async () => {
       calls += 1;
       return { kind: "text", text: "unexpected", model: "primary-model" };
     },
   });
-  const manager = new AiProviderManager([primary], managerConfig());
+  const fallback = fakeProvider({
+    id: "secondary",
+    complete: async () => {
+      fallbackCalls += 1;
+      return { kind: "text", text: "unexpected fallback", model: "secondary-model" };
+    },
+  });
+  const manager = new AiProviderManager([primary, fallback], managerConfig());
 
   await assert.rejects(
     manager.complete({ messages, parameters: { temperature: 0.2 } }),
     (error) => error.code === "invalid_request",
   );
   assert.equal(calls, 0);
+  assert.equal(fallbackCalls, 0);
 });
